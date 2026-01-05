@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Parent Registration - Online Learning Notebook{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-7">
+        <div class="card shadow">
+            <div class="card-header bg-info text-white">
+                <h4 class="mb-0"><i class="bi bi-people-fill"></i> Parent Registration</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('auth.register_parent') }}">
+                    {{ form.hidden_tag() }}
+
+                    <h5 class="mb-3 border-bottom pb-2">Account Information</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Username *</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-person"></i></span>
+                                {{ form.username(class="form-control", placeholder="Choose a username") }}
+                            </div>
+                            {% if form.username.errors %}
+                                <div class="text-danger small">{{ form.username.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Email *</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                                {{ form.email(class="form-control", placeholder="your.email@example.com") }}
+                            </div>
+                            {% if form.email.errors %}
+                                <div class="text-danger small">{{ form.email.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Password *</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                                {{ form.password(class="form-control", placeholder="Minimum 6 characters") }}
+                            </div>
+                            {% if form.password.errors %}
+                                <div class="text-danger small">{{ form.password.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Confirm Password *</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                                {{ form.confirm_password(class="form-control", placeholder="Confirm your password") }}
+                            </div>
+                            {% if form.confirm_password.errors %}
+                                <div class="text-danger small">{{ form.confirm_password.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <h5 class="mb-3 mt-4 border-bottom pb-2">Parent Information</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Full Name *</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-card-text"></i></span>
+                                {{ form.full_name(class="form-control", placeholder="First and Last Name") }}
+                            </div>
+                            {% if form.full_name.errors %}
+                                <div class="text-danger small">{{ form.full_name.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Phone Number *</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-phone"></i></span>
+                                {{ form.phone(class="form-control", placeholder="+1234567890") }}
+                            </div>
+                            {% if form.phone.errors %}
+                                <div class="text-danger small">{{ form.phone.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Occupation</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-briefcase"></i></span>
+                                {{ form.occupation(class="form-control", placeholder="Your occupation") }}
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Relationship to Student *</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-person-heart"></i></span>
+                                {{ form.relationship(class="form-select") }}
+                            </div>
+                            {% if form.relationship.errors %}
+                                <div class="text-danger small">{{ form.relationship.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <h5 class="mb-3 mt-4 border-bottom pb-2">Student Information</h5>
+                    <div class="mb-3">
+                        <label class="form-label">Student Username *</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person-video"></i></span>
+                            {{ form.student_username(class="form-control", placeholder="Enter student's username") }}
+                        </div>
+                        {% if form.student_username.errors %}
+                            <div class="text-danger small">{{ form.student_username.errors[0] }}</div>
+                        {% endif %}
+                        <div class="form-text">Make sure the student is already registered in the system.</div>
+                    </div>
+
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-info btn-lg">
+                            <i class="bi bi-check-circle"></i> Register as Parent
+                        </button>
+                        <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Login
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

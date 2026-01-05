@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}Parent Dashboard - Online Learning Notebook{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Sidebar with Children -->
+    <div class="col-md-4 col-lg-3">
+        <div class="card shadow-sm">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-people"></i> My Children</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for child in children %}
+                    <a href="{{ url_for('notes.student_notes', student_id=child.id) }}"
+                       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ child.user.full_name }}</strong>
+                            <div class="text-muted small">@{{ child.user.username }}</div>
+                            <div class="text-muted small">{{ child.grade_level or "No grade level" }}</div>
+                        </div>
+                        <span class="badge bg-info rounded-pill">
+                            {% set child_notes = notes|selectattr('student_id', 'equalto', child.id)|list %}
+                            {{ child_notes|length }}
+                        </span>
+                    </a>
+                    {% else %}
+                    <div class="list-group-item text-center text-muted py-4">
+                        <i class="bi bi-person display-6 mb-2"></i>
+                        <p class="mb-0">No children registered</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="card shadow-sm mt-4">
+            <div class="card-body">
+                <h6 class="card-title">Overview</h6>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Total Children:</span>
+                    <strong>{{ children|length }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Total Notes:</span>
+                    <strong>{{ notes|length }}</strong>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>Signed Notes:</span>
+                    <strong>
+                        {% set signed = namespace(count=0) %}
+                        {% for note in notes %}
+                            {% if note.signature %}{% set signed.count = signed.count + 1 %}{% endif %}
+                        {% endfor %}
+                        {{ signed.count }}
+                    </strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="col-md-8 col-lg-9">
+        <!-- Welcome Card -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h3 class="card-title">
+                    <i class="bi bi-people-fill text-info"></i> Welcome, {{ current_user.full_name }}!
+                </h3>
+                <p class="card-text">
+                    You are monitoring {{ children|length }} child(ren) with {{ notes|length }} total notes.
+                </p>
+            </div>
+        </div>
+
+        <!-- Recent Notes from All Children -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-journal-text"></i> Recent Lesson Notes</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if notes %}
+                <div class="list-group list-group-flush">
+                    {% for note in notes %}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">{{ note.title }}</h6>
+                                <small class="text-muted">
+                                    <i class="bi bi-person-circle"></i> {{ note.student.user.full_name }}
+                                    • <i class="bi bi-person-badge"></i> {{ note.teacher.user.full_name }}
+                                    • <i class="bi bi-calendar"></i> {{ note.date.strftime('%Y-%m-%d') }}
+                                </small>
+                                <p class="mb-1 mt-2">{{ note.content|truncate(120) }}</p>
+                            </div>
+                            <div class="ms-3 text-end">
+                                {% if note.signature %}
+                                <span class="badge bg-success mb-2">
+                                    <i class="bi bi-check-circle"></i> Signed
+                                </span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark mb-2">
+                                    <i class="bi bi-clock"></i> Pending
+                                </span>
+                                {% endif %}
+                                <div>
+                                    <a href="{{ url_for('notes.view_note', note_id=note.id) }}"
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% if note.homework %}
+                        <div class="mt-2">
+                            <span class="badge bg-info">Homework</span>
+                            <small class="text-muted">{{ note.homework|truncate(80) }}</small>
+                        </div>
+                        {% endif %}
+                        {% if note.audio_filename or note.pdf_filename %}
+                        <div class="mt-2">
+                            {% if note.audio_filename %}
+                            <span class="badge bg-secondary me-2">
+                                <i class="bi bi-mic"></i> Audio
+                            </span>
+                            {% endif %}
+                            {% if note.pdf_filename %}
+                            <span class="badge bg-danger">
+                                <i class="bi bi-file-pdf"></i> PDF
+                            </span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-journal-text display-6 text-muted mb-3"></i>
+                    <p class="text-muted">No lesson notes available for your children yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Children Performance Summary -->
+        <div class="row mt-4">
+            {% for child in children %}
+            <div class="col-md-6">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h6 class="mb-0">{{ child.user.full_name }}'s Progress</h6>
+                    </div>
+                    <div class="card-body">
+                        {% set child_notes = notes|selectattr('student_id', 'equalto', child.id)|list %}
+                        {% set signed_count = child_notes|selectattr('signature')|list|length %}
+
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Notes Signed</span>
+                                <span>{{ signed_count }}/{{ child_notes|length }}</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar bg-success"
+                                     style="width: {% if child_notes|length > 0 %}{{ (signed_count / child_notes|length) * 100 }}{% else %}0{% endif %}%"></div>
+                            </div>
+                        </div>
+
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <div class="border rounded p-2">
+                                    <div class="h4 mb-0">{{ child_notes|length }}</div>
+                                    <small class="text-muted">Total Notes</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="border rounded p-2">
+                                    <div class="h4 mb-0 text-success">{{ signed_count }}</div>
+                                    <small class="text-muted">Signed</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="border rounded p-2">
+                                    <div class="h4 mb-0 text-warning">{{ child_notes|length - signed_count }}</div>
+                                    <small class="text-muted">Pending</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <a href="{{ url_for('notes.student_notes', student_id=child.id) }}"
+                               class="btn btn-outline-primary btn-sm w-100">
+                                View All Notes
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

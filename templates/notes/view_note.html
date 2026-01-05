@@ -1,0 +1,525 @@
+{% extends "base.html" %}
+
+{% block title %}{{ note.title }} - Online Learning Notebook{% endblock %}
+
+{% block content %}
+<div class="container">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('notes.student_notes', student_id=note.student.id) }}">
+                    {{ note.student.user.full_name }}
+                </a>
+            </li>
+            <li class="breadcrumb-item active">{{ note.title|truncate(30) }}</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Main Note Content -->
+        <div class="col-lg-8">
+            <div class="card shadow-lg mb-4">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h2 class="mb-1">{{ note.title }}</h2>
+                            <div class="d-flex flex-wrap gap-2">
+                                <small>
+                                    <i class="bi bi-person-badge"></i> {{ note.teacher.user.full_name }}
+                                </small>
+                                <small>
+                                    <i class="bi bi-calendar"></i> {{ note.date.strftime('%B %d, %Y') }}
+                                </small>
+                                <small>
+                                    <i class="bi bi-clock"></i> {{ note.date.strftime('%I:%M %p') }}
+                                </small>
+                            </div>
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-three-dots-vertical"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                {% if current_user.role == 'teacher' and current_user.teacher_profile.id == note.teacher_id %}
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('notes.edit_note', note_id=note.id) }}">
+                                        <i class="bi bi-pencil"></i> Edit Note
+                                    </a>
+                                </li>
+                                {% endif %}
+                                <li>
+                                    <a class="dropdown-item" href="#" onclick="window.print()">
+                                        <i class="bi bi-printer"></i> Print Note
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="#" id="copyNoteLink">
+                                        <i class="bi bi-link"></i> Copy Link
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                {% if current_user.role == 'teacher' %}
+                                <li>
+                                    <a class="dropdown-item text-danger" href="#" data-bs-toggle="modal" data-bs-target="#deleteNoteModal">
+                                        <i class="bi bi-trash"></i> Delete Note
+                                    </a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <!-- Note Content -->
+                    <div class="note-content mb-5">
+                        {{ note.content|nl2br|safe }}
+                    </div>
+
+                    <!-- Homework Section -->
+                    {% if note.homework %}
+                    <div class="card border-info mb-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">
+                                <i class="bi bi-journal-check"></i> Homework Assignment
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="homework-content">
+                                {{ note.homework|nl2br|safe }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Attachments -->
+                    {% if note.audio_filename or note.document_filename or note.image_filename%}
+                    <div class="card mb-4">
+                        <div class="card-header bg-secondary text-white">
+                            <h5 class="mb-0">
+                                <i class="bi bi-paperclip"></i> Attachments
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if note.audio_filename %}
+                            <div class="mb-3">
+                                <h6>
+                                    <i class="bi bi-mic text-success"></i> Audio Recording
+                                </h6>
+                                <audio controls class="w-100 mt-2">
+                                    <source src="{{ url_for('static', filename='uploads/audio/' + note.audio_filename) }}" type="audio/mpeg">
+                                    Your browser does not support the audio element.
+                                </audio>
+                            </div>
+                            {% endif %}
+
+                            {% if note.document_filename %}
+                            <div>
+                                <h6>
+                                    <i class="bi bi-file-pdf text-danger"></i> Document
+                                </h6>
+                                <div class="mt-2">
+                                    <a href="{{ url_for('static', filename='uploads/documents/' + note.document_filename) }}"
+                                       target="_blank" class="btn btn-outline-primary">
+                                        <i class="bi bi-eye"></i> View Document
+                                    </a>
+                                    <a href="{{ url_for('static', filename='uploads/documents/' + note.document_filename) }}"
+                                       download class="btn btn-outline-secondary">
+                                        <i class="bi bi-download"></i> Download
+                                    </a>
+                                </div>
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="bi bi-file-earmark"></i> {{ note.document_filename }}
+
+                                    </small>
+                                </div>
+                            {% if note.image_filename %}
+        <div>
+            <h6>
+                <i class="bi bi-image text-info"></i> Image
+            </h6>
+            <div class="mt-3">
+                <img src="{{ url_for('static', filename='uploads/images/' + note.image_filename) }}"
+                     alt="Note image"
+                     class="img-fluid rounded border"
+                     style="max-height: 300px;">
+            </div>
+            <div class="mt-2">
+                <a href="{{ url_for('static', filename='uploads/images/' + note.image_filename) }}"
+                   target="_blank" class="btn btn-sm btn-outline-info">
+                    <i class="bi bi-arrows-fullscreen"></i> View Full Size
+                </a>
+                <a href="{{ url_for('static', filename='uploads/images/' + note.image_filename) }}"
+                   download class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-download"></i> Download
+                </a>
+            </div>
+            <div class="mt-2">
+                <small class="text-muted">
+                    <i class="bi bi-file-earmark-image"></i> {{ note.image_filename }}
+                </small>
+            </div>
+                            </div>
+                            {% endif %}
+
+
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Student Info -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-person-circle"></i> Student Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <i class="bi bi-person-circle display-4 text-success"></i>
+                        <h5 class="mt-2">{{ note.student.user.full_name }}</h5>
+                        <p class="text-muted mb-1">@{{ note.student.user.username }}</p>
+                        {% if note.student.grade_level %}
+                        <span class="badge bg-info">{{ note.student.grade_level }}</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span><i class="bi bi-envelope"></i> Email</span>
+                            <span>{{ note.student.user.email }}</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span><i class="bi bi-telephone"></i> Phone</span>
+                            <span>{{ note.student.user.phone }}</span>
+                        </div>
+                        <div class="list-group-item">
+                            <a href="{{ url_for('notes.student_notes', student_id=note.student.id) }}"
+                               class="btn btn-outline-success w-100">
+                                <i class="bi bi-journal-text"></i> View All Notes
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Signature Status -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header {% if note.signature %}bg-success{% else %}bg-warning text-dark{% endif %}">
+                    <h5 class="mb-0">
+                        <i class="bi bi-pen"></i> Student Signature
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if note.signature %}
+                    <div class="text-center mb-3">
+                        <div class="signature-preview mb-3">
+                            <img src="{{ note.signature.signature_data }}"
+                                 alt="Signature" class="img-fluid border rounded">
+                        </div>
+                        <p class="mb-1">
+                            <strong>Signed by:</strong> {{ note.student.user.full_name }}
+                        </p>
+                        <p class="text-muted small">
+                            <i class="bi bi-clock"></i> {{ note.signature.signed_at.strftime('%B %d, %Y %I:%M %p') }}
+                        </p>
+                        <div class="alert alert-success small">
+                            <i class="bi bi-check-circle"></i> Note verified and signed
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center">
+                        <i class="bi bi-clock display-4 text-warning mb-3"></i>
+                        <p class="mb-3">This note is awaiting student signature.</p>
+
+                        {% if current_user.role == 'student' and current_user.student_profile.id == note.student_id %}
+                        <a href="{{ url_for('notes.sign_note', note_id=note.id) }}"
+                           class="btn btn-success w-100">
+                            <i class="bi bi-pen"></i> Sign This Note
+                        </a>
+                        {% elif current_user.role == 'teacher' %}
+                        <button class="btn btn-outline-warning w-100"
+                                data-bs-toggle="modal" data-bs-target="#requestSignatureModal">
+                            <i class="bi bi-envelope-check"></i> Request Signature
+                        </button>
+                        {% else %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> The student needs to sign this note.
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Note Actions -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-lightning-charge"></i> Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        {% if current_user.role == 'teacher' and current_user.teacher_profile.id == note.teacher_id %}
+                        <a href="{{ url_for('notes.edit_note', note_id=note.id) }}"
+                           class="btn btn-info">
+                            <i class="bi bi-pencil"></i> Edit Note
+                        </a>
+                        {% endif %}
+
+                        <a href="#" onclick="window.print()" class="btn btn-outline-primary">
+                            <i class="bi bi-printer"></i> Print Note
+                        </a>
+
+                        {% if current_user.role == 'teacher' %}
+                        <button class="btn btn-outline-success"
+                                data-bs-toggle="modal" data-bs-target="#shareNoteModal">
+                            <i class="bi bi-share"></i> Share with Parent
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Note Modal -->
+<div class="modal fade" id="deleteNoteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Note</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this note?</p>
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> This action cannot be undone. All associated audio, PDFs, and signatures will be deleted.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('notes.delete_note', note_id=note.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Delete Note</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Request Signature Modal -->
+<div class="modal fade" id="requestSignatureModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Request Signature</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Send a signature request to {{ note.student.user.full_name }} for this note?</p>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> An email notification will be sent to the student.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('notes.request_signatures', student_id=note.student.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-primary">Send Request</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Share Note Modal -->
+<div class="modal fade" id="shareNoteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Share Note</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Share with Parent</label>
+                    <select class="form-select" id="parentSelect">
+                        <option value="">Select a parent</option>
+                        <!-- Parents will be populated via JavaScript -->
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Message (optional)</label>
+                    <textarea class="form-control" rows="3" placeholder="Add a message to the parent..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="shareNoteBtn">Share Note</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Copy note link
+    document.getElementById('copyNoteLink').addEventListener('click', function(e) {
+        e.preventDefault();
+        const noteUrl = window.location.href;
+
+        navigator.clipboard.writeText(noteUrl).then(() => {
+            // Show toast notification
+            showToast('Note link copied to clipboard!', 'success');
+        });
+    });
+
+    // Share note functionality
+    const shareBtn = document.getElementById('shareNoteBtn');
+    if (shareBtn) {
+        shareBtn.addEventListener('click', async function() {
+            const parentId = document.getElementById('parentSelect').value;
+            const message = document.querySelector('#shareNoteModal textarea').value;
+
+            if (!parentId) {
+                alert('Please select a parent');
+                return;
+            }
+
+            try {
+                this.disabled = true;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sharing...';
+
+                const response = await fetch('/api/note/{{ note.id }}/share', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    body: JSON.stringify({
+                        parent_id: parentId,
+                        message: message
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Note shared successfully!', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('shareNoteModal')).hide();
+                } else {
+                    showToast(data.error || 'Failed to share note', 'danger');
+                }
+            } catch (error) {
+                showToast('Error sharing note', 'danger');
+            } finally {
+                this.disabled = false;
+                this.textContent = 'Share Note';
+            }
+        });
+    }
+
+    // Load parents for sharing
+    const parentSelect = document.getElementById('parentSelect');
+    if (parentSelect) {
+        loadParents();
+    }
+
+    async function loadParents() {
+        try {
+            const response = await fetch('/api/student/{{ note.student.id }}/parents');
+            const data = await response.json();
+
+            if (data.success && data.parents.length > 0) {
+                parentSelect.innerHTML = '<option value="">Select a parent</option>';
+                data.parents.forEach(parent => {
+                    const option = document.createElement('option');
+                    option.value = parent.id;
+                    option.textContent = `${parent.full_name} (${parent.relationship})`;
+                    parentSelect.appendChild(option);
+                });
+            } else {
+                parentSelect.innerHTML = '<option value="">No parents available</option>';
+            }
+        } catch (error) {
+            console.error('Error loading parents:', error);
+        }
+    }
+
+    // Utility functions
+    function showToast(message, type) {
+        // Create toast container if it doesn't exist
+        let toastContainer = document.getElementById('toastContainer');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toastContainer';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '1060';
+            document.body.appendChild(toastContainer);
+        }
+
+        // Create toast
+        const toastId = 'toast-' + Date.now();
+        const toast = document.createElement('div');
+        toast.id = toastId;
+        toast.className = `toast align-items-center text-bg-${type}`;
+        toast.setAttribute('role', 'alert');
+
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi ${getToastIcon(type)} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+
+        toastContainer.appendChild(toast);
+
+        const bsToast = new bootstrap.Toast(toast, {
+            autohide: true,
+            delay: 3000
+        });
+
+        bsToast.show();
+
+        toast.addEventListener('hidden.bs.toast', function() {
+            toast.remove();
+        });
+    }
+
+    function getToastIcon(type) {
+        switch(type) {
+            case 'success': return 'bi-check-circle';
+            case 'danger': return 'bi-exclamation-circle';
+            case 'warning': return 'bi-exclamation-triangle';
+            default: return 'bi-info-circle';
+        }
+    }
+
+    function getCsrfToken() {
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        if (metaTag) {
+            return metaTag.getAttribute('content');
+        }
+        return '';
+    }
+});
+</script>
+{% endblock %}

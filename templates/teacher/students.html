@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}My Students - Online Learning Notebook{% endblock %}
+
+{% block content %}
+<div class="container">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('dashboard.dashboard') }}">
+                    <i class="bi bi-house-door"></i> Dashboard
+                </a>
+            </li>
+            <li class="breadcrumb-item active">My Students</li>
+        </ol>
+    </nav>
+
+    <div class="card shadow-lg border-0">
+        <div class="card-header bg-primary text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h3 class="mb-0">
+                    <i class="bi bi-people"></i> My Students
+                </h3>
+                <a href="{{ url_for('notes.add_student') }}" class="btn btn-light">
+                    <i class="bi bi-plus-circle"></i> Add Student
+                </a>
+            </div>
+        </div>
+
+        <div class="card-body">
+            {% if students %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Grade Level</th>
+                            <th>Notes Count</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>
+                                <strong>{{ student.user.full_name }}</strong>
+                            </td>
+                            <td>@{{ student.user.username }}</td>
+                            <td>{{ student.user.email }}</td>
+                            <td>
+                                {% if student.grade_level %}
+                                <span class="badge bg-info">{{ student.grade_level }}</span>
+                                {% else %}
+                                <span class="text-muted">Not set</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-primary">
+                                    {{ student.notes|length }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{{ url_for('notes.student_notes', student_id=student.id) }}"
+                                       class="btn btn-outline-primary">
+                                        <i class="bi bi-journal-text"></i> Notes
+                                    </a>
+                                    <a href="{{ url_for('notes.add_note', student_id=student.id) }}"
+                                       class="btn btn-outline-success">
+                                        <i class="bi bi-plus-circle"></i> Add Note
+                                    </a>
+                                    <button type="button" class="btn btn-outline-danger"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#removeStudentModal{{ student.id }}">
+                                        <i class="bi bi-person-dash"></i> Remove
+                                    </button>
+                                </div>
+
+                                <!-- Remove Student Modal -->
+                                <div class="modal fade" id="removeStudentModal{{ student.id }}" tabindex="-1">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Remove Student</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p>Are you sure you want to remove <strong>{{ student.user.full_name }}</strong> from your class?</p>
+                                                <div class="alert alert-warning">
+                                                    <i class="bi bi-exclamation-triangle"></i>
+                                                    This will not delete the student's account, but you will no longer have access to their notes.
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <form method="POST" action="{{ url_for('notes.remove_student_from_teacher', student_id=student.id) }}" class="d-inline">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <button type="submit" class="btn btn-danger">Remove Student</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-people display-1 text-muted mb-3"></i>
+                <h4 class="text-muted">No Students Yet</h4>
+                <p class="text-muted mb-4">You haven't added any students to your class yet.</p>
+                <a href="{{ url_for('notes.add_student') }}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-plus-circle"></i> Add Your First Student
+                </a>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if students %}
+        <div class="card-footer bg-light">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">{{ students|length }}</h5>
+                            <p class="card-text">Total Students</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-success text-white">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">
+                                {{ total_notes }}
+                            </h5>
+                            <p class="card-text">Total Notes</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-info text-white">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">
+                                {{ signed_notes }}
+                            </h5>
+                            <p class="card-text">Signed Notes</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

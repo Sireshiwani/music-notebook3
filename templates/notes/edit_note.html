@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Note - Online Learning Notebook{% endblock %}
+
+{% block content %}
+<div class="container">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('notes.student_notes', student_id=note.student.id) }}">
+                    {{ note.student.user.full_name }}
+                </a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('notes.view_note', note_id=note.id) }}">{{ note.title|truncate(30) }}</a>
+            </li>
+            <li class="breadcrumb-item active">Edit</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow-lg">
+                <div class="card-header bg-warning text-dark">
+                    <h3 class="mb-0">
+                        <i class="bi bi-pencil"></i> Edit Lesson Note
+                        <small class="d-block mt-1">{{ note.student.user.full_name }} • {{ note.date.strftime('%B %d, %Y') }}</small>
+                    </h3>
+                </div>
+
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        {{ form.hidden_tag() }}
+
+                        <!-- Note Title -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Lesson Title *</label>
+                            {{ form.title(class="form-control form-control-lg", required=true) }}
+                        </div>
+
+                        <!-- Lesson Notes -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Lesson Notes *</label>
+                            {{ form.content(class="form-control", rows="10", required=true) }}
+                        </div>
+
+                        <!-- Homework Assignment -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Homework Assignment</label>
+                            {{ form.homework(class="form-control", rows="5") }}
+                        </div>
+
+                        <!-- Current Attachments -->
+                        {% if note.audio_filename or note.document_filename %}
+                        <div class="card mb-4">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-paperclip"></i> Current Attachments
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                {% if note.audio_filename %}
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div>
+                                        <i class="bi bi-file-music text-success me-2"></i>
+                                        <span>Audio Recording</span>
+                                        <small class="text-muted d-block">Attached to this note</small>
+                                    </div>
+                                    <div class="btn-group">
+                                        <audio controls class="me-2" style="width: 200px;">
+                                            <source src="{{ url_for('static', filename='uploads/audio/' + note.audio_filename) }}" type="audio/mpeg">
+                                        </audio>
+                                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                                data-bs-toggle="modal" data-bs-target="#deleteAudioModal">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                {% endif %}
+
+                                {% if note.document_filename %}
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="bi bi-file-pdf text-danger me-2"></i>
+                                        <span>{{ note.document_filename|truncate(30) }}</span>
+                                        <small class="text-muted d-block">PDF Document</small>
+                                    </div>
+                                    <div class="btn-group">
+                                        <a href="{{ url_for('static', filename='uploads/pdf/' + note.document_filename) }}"
+                                           target="_blank" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                                data-bs-toggle="modal" data-bs-target="#deletePdfModal">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Replace PDF -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-secondary text-white">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-arrow-clockwise"></i> Update PDF Attachment
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Upload New PDF (optional)</label>
+                                    <p class="text-muted small mb-2">
+                                        Leave empty to keep current PDF, or upload a new one to replace it.
+                                    </p>
+                                    {{ form.document_file(class="form-control") }}
+                                    {% if form.document_file.errors %}
+                                        <div class="text-danger small mt-2">
+                                            {% for error in form.document_file.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{{ url_for('notes.view_note', note_id=note.id) }}"
+                               class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                            <div class="btn-group">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-save"></i> Save Changes
+                                </button>
+                                <button type="button" class="btn btn-primary dropdown-toggle dropdown-toggle-split"
+                                        data-bs-toggle="dropdown">
+                                    <span class="visually-hidden">More Options</span>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <button type="submit" name="action" value="save_and_new" class="dropdown-item">
+                                            <i class="bi bi-save-plus"></i> Save & Add New
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button type="submit" name="action" value="save_and_view" class="dropdown-item">
+                                            <i class="bi bi-save-check"></i> Save & View
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Audio Modal -->
+<div class="modal fade" id="deleteAudioModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Audio Recording</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the audio recording from this note?</p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> This action cannot be undone.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('notes.delete_audio', note_id=note.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-danger">Delete Audio</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete PDF Modal -->
+<div class="modal fade" id="deletePdfModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete PDF Attachment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the PDF attachment from this note?</p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> This action cannot be undone.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('notes.delete_pdf', note_id=note.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-danger">Delete PDF</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,550 @@
+{% extends "base.html" %}
+
+{% block title %}Add New Note - Online Learning Notebook{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Progress bar for file upload */
+    .upload-progress {
+        height: 20px;
+        margin-top: 10px;
+    }
+
+    .upload-progress .progress-bar {
+        transition: width 0.3s ease;
+    }
+
+    /* File preview cards */
+    .file-preview-card {
+        border: 2px dashed #dee2e6;
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        background: #f8f9fa;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+
+    .file-preview-card:hover {
+        border-color: #4361ee;
+        background: #e9ecef;
+    }
+
+    .file-preview-card.dragover {
+        border-color: #4361ee;
+        background: #e3f2fd;
+    }
+
+    /* Recording controls */
+    .recording-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: #dc3545;
+        animation: pulse 1.5s infinite;
+        margin-right: 8px;
+    }
+
+    @keyframes pulse {
+        0% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(1.1); }
+        100% { opacity: 1; transform: scale(1); }
+    }
+
+    /* Attachment preview */
+    .attachment-preview {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        background: white;
+    }
+
+    .attachment-preview .file-info {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .attachment-preview .file-icon {
+        font-size: 2rem;
+    }
+
+    /* Audio visualizer */
+    .audio-visualizer {
+        height: 50px;
+        background: #f8f9fa;
+        border-radius: 5px;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .audio-visualizer .bar {
+        position: absolute;
+        bottom: 0;
+        width: 3px;
+        background: #4361ee;
+        margin: 0 1px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Breadcrumb Navigation -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('dashboard.dashboard') }}">
+                    <i class="bi bi-house-door"></i> Dashboard
+                </a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('notes.student_notes', student_id=student.id) }}">
+                    {{ student.user.full_name }}
+                </a>
+            </li>
+            <li class="breadcrumb-item active">Add New Note</li>
+        </ol>
+    </nav>
+
+    <!-- Main Form -->
+    <div class="row justify-content-center">
+        <div class="col-xl-10">
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-primary text-white py-3">
+                    <h3 class="mb-0">
+                        <i class="bi bi-plus-circle"></i> Create New Lesson Note
+                        <small class="d-block mt-1 text-light">Student: {{ student.user.full_name }}</small>
+                    </h3>
+                </div>
+
+                <form method="POST" enctype="multipart/form-data" id="noteForm" class="needs-validation" novalidate>
+                    {{ form.hidden_tag() }}
+
+                    <div class="card-body">
+                        <!-- Basic Information Section -->
+                        <div class="row mb-4">
+                            <div class="col-md-8">
+                                <div class="mb-3">
+                                    <label for="title" class="form-label fw-bold">
+                                        <i class="bi bi-card-heading"></i> Lesson Title *
+                                    </label>
+                                    {{ form.title(class="form-control form-control-lg",
+                                                 placeholder="Enter a descriptive title for this lesson",
+                                                 required=true) }}
+                                    <div class="invalid-feedback">
+                                        Please provide a lesson title.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body py-2">
+                                        <small class="text-muted">
+                                            <i class="bi bi-info-circle"></i>
+                                            All fields marked with * are required
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lesson Notes -->
+                        <div class="mb-4">
+                            <label for="content" class="form-label fw-bold">
+                                <i class="bi bi-journal-text"></i> Lesson Notes *
+                            </label>
+                            {{ form.content(class="form-control", rows="10",
+                                           placeholder="Enter detailed notes about the lesson...",
+                                           required=true) }}
+                            <div class="form-text">
+                                <i class="bi bi-lightbulb"></i> Include key concepts, student progress, and areas for improvement.
+                            </div>
+                            <div class="invalid-feedback">
+                                Please provide lesson notes.
+                            </div>
+                        </div>
+
+                        <!-- Homework Assignment -->
+                        <div class="mb-4">
+                            <label for="homework" class="form-label fw-bold">
+                                <i class="bi bi-journal-check"></i> Homework Assignment
+                            </label>
+                            {{ form.homework(class="form-control", rows="4",
+                                            placeholder="Enter homework assignments with clear instructions and deadlines...") }}
+                            <div class="form-text">
+                                <i class="bi bi-calendar"></i> Include due dates and specific requirements.
+                            </div>
+                        </div>
+
+                        <!-- Audio Recording Section -->
+                        <div class="card mb-4 border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-mic"></i> Audio Recording
+                                    <small class="d-block mt-1">Record lesson audio (optional)</small>
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <!-- Audio Controls -->
+                                        <div class="mb-3">
+                                            <div class="btn-group" role="group">
+                                                <button type="button" id="startRecording"
+                                                        class="btn btn-danger">
+                                                    <i class="bi bi-mic-fill"></i> Start Recording
+                                                </button>
+                                                <button type="button" id="stopRecording"
+                                                        class="btn btn-secondary" disabled>
+                                                    <i class="bi bi-stop-fill"></i> Stop
+                                                </button>
+                                                <button type="button" id="pauseRecording"
+                                                        class="btn btn-warning" disabled>
+                                                    <i class="bi bi-pause-fill"></i> Pause
+                                                </button>
+                                                <button type="button" id="resumeRecording"
+                                                        class="btn btn-success" disabled>
+                                                    <i class="bi bi-play-fill"></i> Resume
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Recording Status -->
+                                        <div id="recordingStatus" class="mb-3">
+                                            <div class="d-flex align-items-center">
+                                                <div class="spinner-border text-danger me-2 d-none"
+                                                     id="recordingSpinner" role="status"></div>
+                                                <span id="statusText" class="text-muted">
+                                                    Ready to record. Click "Start Recording" to begin.
+                                                </span>
+                                            </div>
+                                            <div class="mt-2">
+                                                <div class="d-flex justify-content-between">
+                                                    <small class="text-muted">
+                                                        Recording time: <span id="timer">00:00</span>
+                                                    </small>
+                                                    <small class="text-muted">
+                                                        File size: <span id="fileSize">0 MB</span>
+                                                    </small>
+                                                </div>
+                                                <div class="progress upload-progress d-none" id="audioProgress">
+                                                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                                         role="progressbar"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Audio Visualizer -->
+                                        <div class="audio-visualizer mb-3 d-none" id="audioVisualizer">
+                                            <!-- Bars will be generated by JavaScript -->
+                                        </div>
+
+                                        <!-- Audio Playback -->
+                                        <div class="d-none" id="audioPlaybackContainer">
+                                            <label class="form-label">Recording Preview:</label>
+                                            <audio controls class="w-100" id="audioPlayback"></audio>
+                                            <div class="mt-2">
+                                                <button type="button" id="deleteRecording"
+                                                        class="btn btn-sm btn-outline-danger">
+                                                    <i class="bi bi-trash"></i> Delete Recording
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="card bg-light">
+                                            <div class="card-body">
+                                                <h6><i class="bi bi-info-circle text-primary"></i> Tips</h6>
+                                                <ul class="small mb-0">
+                                                    <li>Record in a quiet environment</li>
+                                                    <li>Use headphones for better quality</li>
+                                                    <li>Keep recordings under 10 minutes</li>
+                                                    <li>Audio will be compressed to save space</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+
+                                        <!-- Compression Settings -->
+                                        <div class="card mt-3">
+                                            <div class="card-body">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox"
+                                                           id="compressAudio" checked>
+                                                    <label class="form-check-label" for="compressAudio">
+                                                        Compress audio
+                                                    </label>
+                                                    <small class="text-muted d-block">
+                                                        Reduces file size for faster uploads
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <input type="hidden" name="audio_data" id="audioData">
+                            </div>
+                        </div>
+
+                        <!-- File Upload Section -->
+                        <div class="row">
+                            <!-- Document Upload -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100 border-success">
+                                    <div class="card-header bg-success text-white">
+                                        <h5 class="mb-0">
+                                            <i class="bi bi-file-earmark-text"></i> Document Upload
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="file-preview-card" id="documentUploadArea">
+                                            <i class="bi bi-cloud-arrow-up display-4 text-success mb-3"></i>
+                                            <p class="mb-2">Drag & drop PDF or Word documents here</p>
+                                            <p class="text-muted small mb-3">
+                                                Max size: 50MB<br>
+                                                Supported: PDF, DOC, DOCX, TXT, RTF
+                                            </p>
+                                            {{ form.document_file(class="form-control", id="documentFile",
+                                                                style="display: none;") }}
+                                            <button type="button" class="btn btn-outline-success"
+                                                    onclick="document.getElementById('documentFile').click()">
+                                                <i class="bi bi-folder2-open"></i> Browse Files
+                                            </button>
+                                        </div>
+
+                                        <!-- Document Preview -->
+                                        <div id="documentPreview" class="d-none">
+                                            <div class="attachment-preview">
+                                                <div class="file-info">
+                                                    <div class="file-icon text-success">
+                                                        <i class="bi bi-file-earmark-text"></i>
+                                                    </div>
+                                                    <div class="flex-grow-1">
+                                                        <strong id="documentName"></strong>
+                                                        <div class="text-muted small" id="documentSize"></div>
+                                                    </div>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                                            id="removeDocument">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                                <div class="progress upload-progress mt-2 d-none"
+                                                     id="documentProgress">
+                                                    <div class="progress-bar bg-success" role="progressbar"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Image Upload -->
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100 border-info">
+                                    <div class="card-header bg-info text-white">
+                                        <h5 class="mb-0">
+                                            <i class="bi bi-image"></i> Image Upload
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="file-preview-card" id="imageUploadArea">
+                                            <i class="bi bi-cloud-arrow-up display-4 text-info mb-3"></i>
+                                            <p class="mb-2">Drag & drop images here</p>
+                                            <p class="text-muted small mb-3">
+                                                Max size: 20MB<br>
+                                                Supported: JPG, JPEG, PNG, GIF, BMP
+                                            </p>
+                                            {{ form.image_file(class="form-control", id="imageFile",
+                                                             style="display: none;") }}
+                                            <button type="button" class="btn btn-outline-info"
+                                                    onclick="document.getElementById('imageFile').click()">
+                                                <i class="bi bi-folder2-open"></i> Browse Files
+                                            </button>
+                                        </div>
+
+                                        <!-- Image Preview -->
+                                        <div id="imagePreview" class="d-none">
+                                            <div class="attachment-preview">
+                                                <div class="file-info">
+                                                    <div class="file-icon text-info">
+                                                        <i class="bi bi-image"></i>
+                                                    </div>
+                                                    <div class="flex-grow-1">
+                                                        <strong id="imageName"></strong>
+                                                        <div class="text-muted small" id="imageSize"></div>
+                                                    </div>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                                            id="removeImage">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                                <div class="mt-2">
+                                                    <img id="imageThumbnail" class="img-thumbnail"
+                                                         style="max-height: 100px;">
+                                                </div>
+                                                <div class="progress upload-progress mt-2 d-none"
+                                                     id="imageProgress">
+                                                    <div class="progress-bar bg-info" role="progressbar"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Form Summary -->
+                        <div class="card mb-4 border-warning">
+                            <div class="card-header bg-warning">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-clipboard-check"></i> Form Summary
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="text-center p-3">
+                                            <div class="display-6 text-primary mb-2" id="wordCount">0</div>
+                                            <small class="text-muted">Words in notes</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="text-center p-3">
+                                            <div class="display-6 text-success mb-2" id="fileCount">0</div>
+                                            <small class="text-muted">Files attached</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="text-center p-3">
+                                            <div class="display-6 text-info mb-2" id="totalSize">0 MB</div>
+                                            <small class="text-muted">Total size</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{{ url_for('notes.student_notes', student_id=student.id) }}"
+                               class="btn btn-secondary btn-lg">
+                                <i class="bi bi-arrow-left"></i> Cancel
+                            </a>
+                            <div class="btn-group">
+                                <button type="submit" name="action" value="save"
+                                        class="btn btn-primary btn-lg">
+                                    <i class="bi bi-save"></i> Save Note
+                                </button>
+                                <button type="button" class="btn btn-primary btn-lg dropdown-toggle dropdown-toggle-split"
+                                        data-bs-toggle="dropdown">
+                                    <span class="visually-hidden">More Options</span>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <button type="submit" name="action" value="save_and_new"
+                                                class="dropdown-item">
+                                            <i class="bi bi-save-plus"></i> Save & Add Another
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button type="submit" name="action" value="save_and_view"
+                                                class="dropdown-item">
+                                            <i class="bi bi-save-check"></i> Save & View
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Processing Modal -->
+<div class="modal fade" id="processingModal" data-bs-backdrop="static" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Processing Your Note</h5>
+            </div>
+            <div class="modal-body text-center">
+                <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h5>Please wait...</h5>
+                <p class="text-muted">We're saving your note and processing attachments.</p>
+                <div class="progress mt-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         id="processingProgress" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Include the comprehensive JavaScript file -->
+<script src="{{ url_for('static', filename='js/note_editor.js') }}"></script>
+
+<!-- Initialize the note editor -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize the note editor
+    const noteEditor = new NoteEditor({
+        formId: 'noteForm',
+        audioRecording: {
+            startBtnId: 'startRecording',
+            stopBtnId: 'stopRecording',
+            pauseBtnId: 'pauseRecording',
+            resumeBtnId: 'resumeRecording',
+            deleteBtnId: 'deleteRecording',
+            visualizerId: 'audioVisualizer',
+            timerId: 'timer',
+            fileSizeId: 'fileSize',
+            statusTextId: 'statusText',
+            spinnerId: 'recordingSpinner',
+            progressBarId: 'audioProgress',
+            dataInputId: 'audioData',
+            compressCheckboxId: 'compressAudio'
+        },
+        fileUploads: {
+            document: {
+                inputId: 'documentFile',
+                previewId: 'documentPreview',
+                uploadAreaId: 'documentUploadArea',
+                nameId: 'documentName',
+                sizeId: 'documentSize',
+                removeBtnId: 'removeDocument',
+                progressBarId: 'documentProgress'
+            },
+            image: {
+                inputId: 'imageFile',
+                previewId: 'imagePreview',
+                uploadAreaId: 'imageUploadArea',
+                nameId: 'imageName',
+                sizeId: 'imageSize',
+                thumbnailId: 'imageThumbnail',
+                removeBtnId: 'removeImage',
+                progressBarId: 'imageProgress'
+            }
+        },
+        summary: {
+            wordCountId: 'wordCount',
+            fileCountId: 'fileCount',
+            totalSizeId: 'totalSize'
+        },
+        processingModalId: 'processingModal',
+        processingProgressId: 'processingProgress'
+    });
+
+    noteEditor.init();
+});
+</script>
+{% endblock %}

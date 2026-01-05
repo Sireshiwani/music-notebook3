@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Add Student - Online Learning Notebook{% endblock %}
+
+{% block content %}
+<div class="container">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('dashboard.dashboard') }}">
+                    <i class="bi bi-house-door"></i> Dashboard
+                </a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('notes.teacher_students') }}">
+                    My Students
+                </a>
+            </li>
+            <li class="breadcrumb-item active">Add Student</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">
+                        <i class="bi bi-plus-circle"></i> Add Student to Class
+                    </h3>
+                </div>
+
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>How to add students:</strong>
+                        <ul class="mb-0">
+                            <li>Students must be registered in the system first</li>
+                            <li>Enter the student's username exactly as they registered it</li>
+                            <li>You can only add students who are not already in another teacher's class</li>
+                        </ul>
+                    </div>
+
+                    <form method="POST" action="{{ url_for('notes.add_student') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="mb-4">
+                            <label for="username" class="form-label fw-bold">
+                                <i class="bi bi-person-badge"></i> Student Username
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">@</span>
+                                <input type="text"
+                                       class="form-control form-control-lg"
+                                       id="username"
+                                       name="username"
+                                       placeholder="Enter student's username"
+                                       required>
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="bi bi-search"></i> Add Student
+                                </button>
+                            </div>
+                            <div class="form-text">
+                                Enter the exact username the student used during registration
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- Available Students List -->
+                    {% if available_students %}
+                    <div class="card mt-4">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">
+                                <i class="bi bi-person-check"></i> Available Students
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted">These students are registered but not in any class:</p>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Username</th>
+                                            <th>Full Name</th>
+                                            <th>Email</th>
+                                            <th>Grade</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for student in available_students %}
+                                        <tr>
+                                            <td>@{{ student.user.username }}</td>
+                                            <td>{{ student.user.full_name }}</td>
+                                            <td>{{ student.user.email }}</td>
+                                            <td>
+                                                {% if student.grade_level %}
+                                                <span class="badge bg-info">{{ student.grade_level }}</span>
+                                                {% else %}
+                                                <span class="text-muted">Not set</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <form method="POST" action="{{ url_for('notes.add_student') }}" class="d-inline">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <input type="hidden" name="username" value="{{ student.user.username }}">
+                                                    <button type="submit" class="btn btn-sm btn-success">
+                                                        <i class="bi bi-plus"></i> Add
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-person-x display-4 text-muted mb-3"></i>
+                        <h5 class="text-muted">No Available Students</h5>
+                        <p class="text-muted">All registered students are already assigned to classes.</p>
+                    </div>
+                    {% endif %}
+
+                    <!-- Search Student Form -->
+                    <div class="card mt-4">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">
+                                <i class="bi bi-search"></i> Search Student
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="input-group mb-3">
+                                <input type="text"
+                                       class="form-control"
+                                       id="searchStudent"
+                                       placeholder="Search by name, username, or email...">
+                                <button class="btn btn-outline-secondary" type="button" id="searchBtn">
+                                    <i class="bi bi-search"></i> Search
+                                </button>
+                            </div>
+                            <div id="searchResults" class="mt-3"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchStudent');
+    const searchBtn = document.getElementById('searchBtn');
+    const searchResults = document.getElementById('searchResults');
+
+    searchBtn.addEventListener('click', searchStudents);
+    searchInput.addEventListener('keyup', function(e) {
+        if (e.key === 'Enter') {
+            searchStudents();
+        }
+    });
+
+    function searchStudents() {
+        const query = searchInput.value.trim();
+
+        if (query.length < 2) {
+            searchResults.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> Please enter at least 2 characters to search.
+                </div>
+            `;
+            return;
+        }
+
+        searchResults.innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Searching...</p>
+            </div>
+        `;
+
+        // Use your existing API endpoint
+        fetch(`/api/students/search?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.students.length > 0) {
+                    let html = `
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle"></i> Found ${data.students.length} student(s)
+                        </div>
+                        <div class="list-group">
+                    `;
+
+                    data.students.forEach(student => {
+                        html += `
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-1">${student.full_name}</h6>
+                                        <small class="text-muted">
+                                            @${student.username} • ${student.email}
+                                        </small>
+                                        <br>
+                                        <small>
+                                            Grade: ${student.grade_level || 'Not set'}
+                                        </small>
+                                    </div>
+                                    <form method="POST" action="{{ url_for('notes.add_student') }}" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="username" value="${student.username}">
+                                        <button type="submit" class="btn btn-sm btn-success">
+                                            <i class="bi bi-plus"></i> Add to Class
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    html += '</div>';
+                    searchResults.innerHTML = html;
+                } else {
+                    searchResults.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i> No students found matching "${query}"
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                searchResults.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-x-circle"></i> Error searching students. Please try again.
+                    </div>
+                `;
+            });
+    }
+});
+</script>
+{% endblock %}

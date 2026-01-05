@@ -1,0 +1,440 @@
+<!-- templates/notes/sign_note.html -->
+{% extends "base.html" %}
+
+{% block title %}Sign Note - Online Learning Notebook{% endblock %}
+
+{% block extra_css %}
+<style>
+    .signature-pad {
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        background-color: white;
+        cursor: crosshair;
+        touch-action: none;
+    }
+
+    .signature-preview {
+        border: 1px solid #28a745;
+        border-radius: 8px;
+        padding: 10px;
+        background-color: #f8f9fa;
+    }
+
+    .clear-btn {
+        transition: all 0.3s ease;
+    }
+
+    .clear-btn:hover {
+        transform: rotate(15deg);
+    }
+
+    .signature-instructions {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 10px;
+        padding: 20px;
+        color: white;
+    }
+
+    .step-indicator {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background-color: #4361ee;
+        color: white;
+        font-weight: bold;
+        margin-right: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Breadcrumb Navigation -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('dashboard.dashboard') }}">
+                    <i class="bi bi-house-door"></i> Dashboard
+                </a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('notes.student_notes', student_id=note.student.id) }}">
+                    {{ note.student.user.full_name }}
+                </a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('notes.view_note', note_id=note.id) }}">
+                    {{ note.title|truncate(20) }}
+                </a>
+            </li>
+            <li class="breadcrumb-item active">Sign Note</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">
+                        <i class="bi bi-pen"></i> Sign Note
+                        <small class="d-block mt-1 text-light">
+                            Note: {{ note.title }} | Student: {{ note.student.user.full_name }}
+                        </small>
+                    </h3>
+                </div>
+
+                <div class="card-body">
+                    <!-- Note Preview -->
+                    <div class="card mb-4 border-info">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">
+                                <i class="bi bi-eye"></i> Note Preview
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <h6>{{ note.title }}</h6>
+                            <p class="text-muted">
+                                <small>
+                                    <i class="bi bi-calendar"></i> {{ note.date.strftime('%B %d, %Y') }}
+                                    <i class="bi bi-person ms-3"></i> {{ note.teacher.user.full_name }}
+                                </small>
+                            </p>
+                            <div class="note-preview border rounded p-3 bg-light" style="max-height: 200px; overflow-y: auto;">
+                                {{ note.content|replace('\n', '<br>\n')|safe }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Signature Instructions -->
+                    <div class="signature-instructions mb-4">
+                        <h4 class="mb-3">
+                            <i class="bi bi-info-circle"></i> How to Sign
+                        </h4>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <div class="step-indicator">1</div>
+                                    <h6 class="mb-0">Draw Your Signature</h6>
+                                </div>
+                                <p class="small mb-0">Use your mouse or touch screen to draw your signature in the box below.</p>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <div class="step-indicator">2</div>
+                                    <h6 class="mb-0">Preview & Clear</h6>
+                                </div>
+                                <p class="small mb-0">Review your signature. If needed, clear and redraw until satisfied.</p>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <div class="step-indicator">3</div>
+                                    <h6 class="mb-0">Submit Signature</h6>
+                                </div>
+                                <p class="small mb-0">Once you're happy with your signature, click "Submit Signature".</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Signature Area -->
+                    <form method="POST" id="signatureForm">
+                        {{ form.hidden_tag() }}
+
+                        <div class="row">
+                            <!-- Signature Canvas -->
+                            <div class="col-md-8">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5 class="mb-0">
+                                            <i class="bi bi-pencil-square"></i> Draw Your Signature
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">Draw in the box below:</label>
+                                            <div class="signature-pad-wrapper border rounded p-2">
+                                                <canvas id="signature-pad" class="signature-pad" width="650" height="200"></canvas>
+                                            </div>
+                                            <div class="form-text">
+                                                Use your mouse or touch to draw. Make sure your signature is clear and matches your usual signature.
+                                            </div>
+                                        </div>
+
+                                        <!-- Signature Controls -->
+                                        <div class="d-flex gap-2 mb-3">
+                                            <button type="button" id="clear-btn" class="btn btn-outline-danger clear-btn">
+                                                <i class="bi bi-eraser"></i> Clear Signature
+                                            </button>
+                                            <button type="button" id="undo-btn" class="btn btn-outline-warning">
+                                                <i class="bi bi-arrow-counterclockwise"></i> Undo Last Stroke
+                                            </button>
+                                            <div class="flex-grow-1"></div>
+                                            <div class="btn-group">
+                                                <button type="button" class="btn btn-outline-secondary" id="thin-line">
+                                                    <i class="bi bi-dash"></i> Thin
+                                                </button>
+                                                <button type="button" class="btn btn-outline-secondary active" id="medium-line">
+                                                    <i class="bi bi-dash-lg"></i> Medium
+                                                </button>
+                                                <button type="button" class="btn btn-outline-secondary" id="thick-line">
+                                                    <i class="bi bi-dash-square"></i> Thick
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Color Picker -->
+                                        <div class="mb-3">
+                                            <label class="form-label">Signature Color:</label>
+                                            <div class="d-flex gap-2 flex-wrap">
+                                                <button type="button" class="btn btn-sm color-btn" style="background-color: #000000; color: white;" data-color="#000000">
+                                                    Black
+                                                </button>
+                                                <button type="button" class="btn btn-sm color-btn" style="background-color: #4361ee; color: white;" data-color="#4361ee">
+                                                    Blue
+                                                </button>
+                                                <button type="button" class="btn btn-sm color-btn" style="background-color: #2a9d8f; color: white;" data-color="#2a9d8f">
+                                                    Teal
+                                                </button>
+                                                <button type="button" class="btn btn-sm color-btn" style="background-color: #e63946; color: white;" data-color="#e63946">
+                                                    Red
+                                                </button>
+                                                <button type="button" class="btn btn-sm color-btn" style="background-color: #7209b7; color: white;" data-color="#7209b7">
+                                                    Purple
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Signature Preview -->
+                            <div class="col-md-4">
+                                <div class="card h-100">
+                                    <div class="card-header">
+                                        <h5 class="mb-0">
+                                            <i class="bi bi-check-circle"></i> Signature Preview
+                                        </h5>
+                                    </div>
+                                    <div class="card-body d-flex flex-column">
+                                        <div class="signature-preview mb-3 flex-grow-1 d-flex align-items-center justify-content-center">
+                                            <div id="signature-preview">
+                                                <p class="text-muted text-center">
+                                                    <i class="bi bi-pen display-4"></i><br>
+                                                    Your signature will appear here
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div class="mt-auto">
+                                            <div class="alert alert-info small mb-3">
+                                                <i class="bi bi-shield-check"></i>
+                                                By signing, you acknowledge that you have read and understood this note.
+                                            </div>
+
+                                            <!-- Hidden input for signature data -->
+                                            <input type="hidden" name="signature" id="signatureData">
+
+                                            <!-- Submit Button -->
+                                            <div class="d-grid">
+                                                <button type="submit" id="submit-btn" class="btn btn-success btn-lg" disabled>
+                                                    <i class="bi bi-check-lg"></i> Submit Signature
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- Signature Agreement -->
+                    <div class="card mt-4 border-warning">
+                        <div class="card-header bg-warning">
+                            <h5 class="mb-0">
+                                <i class="bi bi-exclamation-triangle"></i> Important Information
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6><i class="bi bi-lock"></i> Security Notice</h6>
+                                    <ul class="small">
+                                        <li>Your signature is stored securely and cannot be modified after submission</li>
+                                        <li>The signature includes timestamp and IP address for verification</li>
+                                        <li>Only you and authorized teachers/parents can view this signature</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6><i class="bi bi-check-all"></i> What You're Agreeing To</h6>
+                                    <ul class="small">
+                                        <li>You have read and understood the note content</li>
+                                        <li>You acknowledge receipt of this note</li>
+                                        <li>You confirm this is your legal signature</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Include signature pad library -->
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize signature pad
+    const canvas = document.getElementById('signature-pad');
+    const signaturePad = new SignaturePad(canvas, {
+        backgroundColor: 'rgb(255, 255, 255)',
+        penColor: 'rgb(0, 0, 0)',
+        throttle: 16,
+        minWidth: 1,
+        maxWidth: 3
+    });
+
+    // Resize canvas on window resize
+    function resizeCanvas() {
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = canvas.offsetWidth * ratio;
+        canvas.height = canvas.offsetHeight * ratio;
+        canvas.getContext('2d').scale(ratio, ratio);
+        signaturePad.clear(); // Clear on resize
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Elements
+    const clearBtn = document.getElementById('clear-btn');
+    const undoBtn = document.getElementById('undo-btn');
+    const submitBtn = document.getElementById('submit-btn');
+    const signatureData = document.getElementById('signatureData');
+    const signaturePreview = document.getElementById('signature-preview');
+    const colorButtons = document.querySelectorAll('.color-btn');
+    const lineButtons = {
+        thin: document.getElementById('thin-line'),
+        medium: document.getElementById('medium-line'),
+        thick: document.getElementById('thick-line')
+    };
+
+    // Clear signature
+    clearBtn.addEventListener('click', function() {
+        signaturePad.clear();
+        updateSubmitButton();
+        updatePreview();
+    });
+
+    // Undo last stroke
+    undoBtn.addEventListener('click', function() {
+        const data = signaturePad.toData();
+        if (data) {
+            data.pop(); // Remove last stroke
+            signaturePad.fromData(data);
+            updateSubmitButton();
+            updatePreview();
+        }
+    });
+
+    // Change pen color
+    colorButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const color = this.getAttribute('data-color');
+            signaturePad.penColor = color;
+
+            // Update active state
+            colorButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+
+            // Update preview if signature exists
+            if (!signaturePad.isEmpty()) {
+                updatePreview();
+            }
+        });
+    });
+
+    // Change line thickness
+    lineButtons.thin.addEventListener('click', function() {
+        signaturePad.minWidth = 0.5;
+        signaturePad.maxWidth = 1;
+        updateActiveLineButton('thin');
+    });
+
+    lineButtons.medium.addEventListener('click', function() {
+        signaturePad.minWidth = 1;
+        signaturePad.maxWidth = 3;
+        updateActiveLineButton('medium');
+    });
+
+    lineButtons.thick.addEventListener('click', function() {
+        signaturePad.minWidth = 2;
+        signaturePad.maxWidth = 5;
+        updateActiveLineButton('thick');
+    });
+
+    function updateActiveLineButton(activeButton) {
+        Object.values(lineButtons).forEach(btn => btn.classList.remove('active'));
+        lineButtons[activeButton].classList.add('active');
+    }
+
+    // Update submit button state
+    function updateSubmitButton() {
+        submitBtn.disabled = signaturePad.isEmpty();
+    }
+
+    // Update preview
+    function updatePreview() {
+        if (!signaturePad.isEmpty()) {
+            const dataUrl = signaturePad.toDataURL();
+            signaturePreview.innerHTML = `<img src="${dataUrl}" alt="Signature Preview" class="img-fluid">`;
+        } else {
+            signaturePreview.innerHTML = `
+                <p class="text-muted text-center">
+                    <i class="bi bi-pen display-4"></i><br>
+                    Your signature will appear here
+                </p>
+            `;
+        }
+    }
+
+    // Update on signature change
+    signaturePad.addEventListener('endStroke', function() {
+        updateSubmitButton();
+        updatePreview();
+    });
+
+    // Form submission
+    document.getElementById('signatureForm').addEventListener('submit', function(e) {
+        if (signaturePad.isEmpty()) {
+            e.preventDefault();
+            alert('Please provide a signature before submitting.');
+            return;
+        }
+
+        // Get signature data
+        const signatureImage = signaturePad.toDataURL();
+        signatureData.value = signatureImage;
+
+        // Disable submit button to prevent double submission
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
+
+        // Optional: Add a small delay to show processing
+        setTimeout(() => {
+            // Form will submit normally
+        }, 100);
+    });
+
+    // Initialize
+    updateSubmitButton();
+    updatePreview();
+});
+</script>
+{% endblock %}
