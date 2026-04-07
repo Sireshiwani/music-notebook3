@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}My Students - Online Learning Notebook{% endblock %}
+{% block title %}My Students - Shajara{% endblock %}
 
 {% block content %}
 <div class="container">
@@ -38,6 +38,7 @@
                             <th>Username</th>
                             <th>Email</th>
                             <th>Grade Level</th>
+                            <th>Access</th>
                             <th>Notes Count</th>
                             <th>Actions</th>
                         </tr>
@@ -59,8 +60,15 @@
                                 {% endif %}
                             </td>
                             <td>
+                                {% for label in student_badges.get(student.id, []) %}
+                                <span class="badge bg-light text-dark border me-1">{{ label }}</span>
+                                {% else %}
+                                <span class="text-muted small">—</span>
+                                {% endfor %}
+                            </td>
+                            <td>
                                 <span class="badge bg-primary">
-                                    {{ student.notes|length }}
+                                    {{ teacher_student_note_counts.get(student.id, 0) }}
                                 </span>
                             </td>
                             <td>
@@ -73,13 +81,16 @@
                                        class="btn btn-outline-success">
                                         <i class="bi bi-plus-circle"></i> Add Note
                                     </a>
+                                    {% if student.id in private_student_ids %}
                                     <button type="button" class="btn btn-outline-danger"
                                             data-bs-toggle="modal"
                                             data-bs-target="#removeStudentModal{{ student.id }}">
                                         <i class="bi bi-person-dash"></i> Remove
                                     </button>
+                                    {% endif %}
                                 </div>
 
+                                {% if student.id in private_student_ids %}
                                 <!-- Remove Student Modal -->
                                 <div class="modal fade" id="removeStudentModal{{ student.id }}" tabindex="-1">
                                     <div class="modal-dialog">
@@ -92,7 +103,7 @@
                                                 <p>Are you sure you want to remove <strong>{{ student.user.full_name }}</strong> from your class?</p>
                                                 <div class="alert alert-warning">
                                                     <i class="bi bi-exclamation-triangle"></i>
-                                                    This will not delete the student's account, but you will no longer have access to their notes.
+                                                    This will not delete the student's account, but you will no longer have access to their notes unless they are assigned via a school program.
                                                 </div>
                                             </div>
                                             <div class="modal-footer">
@@ -105,6 +116,7 @@
                                         </div>
                                     </div>
                                 </div>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ note.title }} - Online Learning Notebook{% endblock %}
+{% block title %}{{ note.title }} - Shajara{% endblock %}
 
 {% block content %}
 <div class="container">
@@ -10,9 +10,15 @@
                 <a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
             </li>
             <li class="breadcrumb-item">
+                {% if current_user.role == 'hod' and note.school %}
+                <a href="{{ url_for('goals.hod_school_detail', school_id=note.school_id) }}">{{ note.school.name }}</a>
+                <span class="text-muted mx-1">/</span>
+                <span class="text-muted">{{ note.student.user.full_name }}</span>
+                {% else %}
                 <a href="{{ url_for('notes.student_notes', student_id=note.student.id) }}">
                     {{ note.student.user.full_name }}
                 </a>
+                {% endif %}
             </li>
             <li class="breadcrumb-item active">{{ note.title|truncate(30) }}</li>
         </ol>
@@ -36,6 +42,11 @@
                                 <small>
                                     <i class="bi bi-clock"></i> {{ note.date.strftime('%I:%M %p') }}
                                 </small>
+                                {% if note.calendar_period_id and note.calendar_period %}
+                                <span class="badge bg-secondary">Private: {{ note.calendar_period.name }}</span>
+                                {% elif note.school_term_id and note.school_term %}
+                                <span class="badge bg-info text-dark">School: {{ note.school_term.school.name }} — {{ note.school_term.name }}</span>
+                                {% endif %}
                             </div>
                         </div>
                         <div class="dropdown">

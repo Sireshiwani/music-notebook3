@@ -1,0 +1,186 @@
+{# goal_sets_meta: list of (StudentGoalSet, int pct); calendar_periods & school_options for teachers #}
+{% set calendar_periods = calendar_periods|default([]) %}
+{% set school_options = school_options|default([]) %}
+{% set goal_sets_meta = goal_sets_meta|default([]) %}
+
+<div class="card shadow-sm mb-3 border-primary goal-panel-sidebar" id="student-goals">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h5 class="mb-0"><i class="bi bi-bullseye"></i> Term &amp; period goals</h5>
+        {% if current_user.role == 'teacher' %}
+        <a href="{{ url_for('goals.calendar_periods') }}" class="btn btn-sm btn-light text-primary">
+            <i class="bi bi-calendar3"></i> Calendar periods
+        </a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+
+        {% if current_user.role == 'teacher' and current_user.teacher_profile %}
+            {% if not goal_sets_meta %}
+            <div class="alert alert-light border mb-3">
+                <p class="mb-2"><strong>Where to add goals:</strong> pick a <strong>calendar period</strong> (private) or a <strong>school term</strong> below. That loads the goal set for this student—then use the <strong>Goal 1–5</strong> tabs and <strong>Save goals</strong>.</p>
+                <ol class="small mb-0 ps-3">
+                    <li>If needed, create periods under <a href="{{ url_for('goals.calendar_periods') }}">Calendar periods</a>.</li>
+                    <li>Click a period or term button below to open that goal set.</li>
+                    <li>Use the Goal 1–5 tabs below to enter and save goals.</li>
+                </ol>
+            </div>
+            {% else %}
+            <p class="small text-muted mb-3">Edit goals in the tabs below. To <strong>start another period</strong>, use the buttons here first.</p>
+            {% endif %}
+
+            <h6 class="text-muted text-uppercase small mb-2"><i class="bi bi-plus-circle"></i> Start / open goals by period</h6>
+            {% if calendar_periods %}
+            <div class="mb-2"><span class="badge bg-secondary me-1">Private</span> <span class="small text-muted">Calendar periods</span></div>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                {% for p in calendar_periods %}
+                <a href="{{ url_for('notes.student_notes', student_id=student.id, calendar_period_id=p.id) }}"
+                   class="btn btn-outline-primary btn-sm">
+                    {{ p.name }}
+                    <span class="text-muted">({{ p.start_date }} – {{ p.end_date }})</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-warning small mb-3">
+                <i class="bi bi-exclamation-triangle"></i> No calendar periods yet —
+                <a href="{{ url_for('goals.calendar_periods') }}">create one</a> for private-lesson goals.
+            </p>
+            {% endif %}
+
+            {% if school_options %}
+            <div class="mb-2"><span class="badge bg-info text-dark me-1">School</span> <span class="small text-muted">Terms</span></div>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                {% for block in school_options %}
+                    {% for t in block.terms %}
+                    <a href="{{ url_for('notes.student_notes', student_id=student.id, school_term_id=t.id) }}"
+                       class="btn btn-outline-info btn-sm text-dark">
+                        {{ block.school.name }} — {{ t.name }}
+                        <span class="text-muted">({{ t.start_date }})</span>
+                    </a>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+            <p class="small text-muted mb-3">School goals need the HOD to enroll you and this student and create an assignment.</p>
+            {% endif %}
+
+        {% elif current_user.role in ['student', 'parent'] and not goal_sets_meta %}
+            <p class="text-muted small mb-0">No term goals have been set for this profile yet. Your teacher will add them by period or school term.</p>
+        {% endif %}
+
+        {% for gs, pct in goal_sets_meta %}
+        <div class="mb-4 pb-3 {% if not loop.last %}border-bottom{% endif %}">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                <div>
+                    {% if gs.calendar_period_id and gs.calendar_period %}
+                    <span class="badge bg-secondary">Private</span>
+                    <strong>{{ gs.calendar_period.name }}</strong>
+                    <span class="text-muted small">({{ gs.calendar_period.start_date }} – {{ gs.calendar_period.end_date }})</span>
+                    {% elif gs.school_term_id and gs.school_term %}
+                    <span class="badge bg-info text-dark">School</span>
+                    <strong>{{ gs.school_term.school.name }} — {{ gs.school_term.name }}</strong>
+                    <span class="text-muted small">({{ gs.school_term.start_date }} – {{ gs.school_term.end_date }})</span>
+                    {% else %}
+                    <span class="text-muted">Goal set #{{ gs.id }}</span>
+                    {% endif %}
+                </div>
+                <div>
+                    <span class="badge bg-light text-dark border">{{ pct }}%</span>
+                    {% if current_user.role == 'teacher' and current_user.teacher_profile and gs.teacher_id == current_user.teacher_profile.id %}
+                    {% if gs.calendar_period_id %}
+                    <a class="btn btn-sm btn-outline-primary"
+                       href="{{ url_for('notes.add_note', student_id=student.id, calendar_period_id=gs.calendar_period_id) }}">
+                        Add note in this period
+                    </a>
+                    {% elif gs.school_term_id %}
+                    <a class="btn btn-sm btn-outline-primary"
+                       href="{{ url_for('notes.add_note', student_id=student.id, school_term_id=gs.school_term_id) }}">
+                        Add note in this period
+                    </a>
+                    {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="progress mb-3" style="height:8px;">
+                <div class="progress-bar" style="width: {{ pct }}%"></div>
+            </div>
+
+            {% set slots = gs.five_slots() %}
+            {% set is_goal_editor = current_user.role == 'teacher' and current_user.teacher_profile and gs.teacher_id == current_user.teacher_profile.id %}
+            <div class="goal-five-tabs mb-2">
+                {% if is_goal_editor %}
+                <p class="small text-muted mb-2">Up to five goals for this period. Use the tabs (Goal 1–5), enter text, tick completed, then <strong>Save goals</strong>.</p>
+                <form method="post" action="{{ url_for('goals.goal_set_save_five', goal_set_id=gs.id) }}" id="goal-five-form-{{ gs.id }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                {% else %}
+                <p class="small text-muted mb-2">Up to five goals for this period (Goal 1–5).</p>
+                <div>
+                {% endif %}
+
+                    <ul class="nav nav-tabs nav-justified flex-nowrap small" role="tablist">
+                        {% for n in [1,2,3,4,5] %}
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link py-2 {% if n == 1 %}active{% endif %}" id="tab-gs{{ gs.id }}-g{{ n }}"
+                                    data-bs-toggle="tab" data-bs-target="#pane-gs{{ gs.id }}-g{{ n }}"
+                                    type="button" role="tab" aria-controls="pane-gs{{ gs.id }}-g{{ n }}"
+                                    {% if n == 1 %}aria-selected="true"{% else %}aria-selected="false"{% endif %}>
+                                Goal {{ n }}
+                            </button>
+                        </li>
+                        {% endfor %}
+                    </ul>
+
+                    <div class="tab-content border border-top-0 rounded-bottom bg-white p-3">
+                        {% for n in [1,2,3,4,5] %}
+                        {% set idx = n - 1 %}
+                        {% set item = slots[idx] %}
+                        <div class="tab-pane fade {% if n == 1 %}show active{% endif %}" id="pane-gs{{ gs.id }}-g{{ n }}" role="tabpanel"
+                             aria-labelledby="tab-gs{{ gs.id }}-g{{ n }}">
+
+                            {% if is_goal_editor %}
+                            <label class="form-label fw-semibold">Goal {{ n }}</label>
+                            <input type="text" class="form-control mb-2" name="text_{{ n }}" maxlength="500"
+                                   value="{{ item.text if item else '' }}"
+                                   placeholder="Describe this goal (leave empty to keep this slot unused)">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="done_{{ n }}" id="done-gs{{ gs.id }}-{{ n }}"
+                                       {% if item and item.is_completed %}checked{% endif %}>
+                                <label class="form-check-label" for="done-gs{{ gs.id }}-{{ n }}">Completed</label>
+                            </div>
+                            {% else %}
+                            {% if item and item.text %}
+                            <p class="mb-2">{{ item.text }}</p>
+                            <p class="small mb-0 {% if item.is_completed %}text-success{% else %}text-muted{% endif %}">
+                                {% if item.is_completed %}<i class="bi bi-check-circle-fill"></i> Completed{% else %}<i class="bi bi-circle"></i> In progress{% endif %}
+                            </p>
+                            {% else %}
+                            <p class="text-muted small mb-0"><em>No goal set in this slot.</em></p>
+                            {% endif %}
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    {% if is_goal_editor %}
+                    <div class="mt-2">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-save"></i> Save goals
+                        </button>
+                    </div>
+                    {% endif %}
+
+                {% if is_goal_editor %}
+                </form>
+                {% else %}
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="mt-2">
+                <a href="{{ url_for('goals.goal_audit_log', student_id=student.id, goal_set_id=gs.id) }}" class="small">
+                    <i class="bi bi-clock-history"></i> Audit history
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>

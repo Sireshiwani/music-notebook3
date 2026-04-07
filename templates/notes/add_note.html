@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Add New Note - Online Learning Notebook{% endblock %}
+{% block title %}Add New Note - Shajara{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -124,6 +124,56 @@
                     {{ form.hidden_tag() }}
 
                     <div class="card-body">
+                        <!-- Lesson period & track -->
+                        <div class="card border-secondary mb-4">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0"><i class="bi bi-calendar-range"></i> Lesson period</h5>
+                                <small class="text-muted">Private lessons use a calendar period; school lessons use a school term.</small>
+                            </div>
+                            <div class="card-body">
+                                <div class="btn-group mb-3" role="group" aria-label="Lesson track">
+                                    <input type="radio" class="btn-check" name="lesson_track" id="trackPrivate" value="private"
+                                           checked autocomplete="off">
+                                    <label class="btn btn-outline-primary" for="trackPrivate">Private (calendar period)</label>
+                                    <input type="radio" class="btn-check" name="lesson_track" id="trackSchool" value="school"
+                                           autocomplete="off" {% if not school_options %}disabled{% endif %}>
+                                    <label class="btn btn-outline-primary {% if not school_options %}disabled{% endif %}" for="trackSchool">School term</label>
+                                </div>
+                                {% if not school_options %}
+                                <p class="text-muted small">You are not in any school yet, or your HOD has not added you. Only private lessons are available.</p>
+                                {% endif %}
+
+                                <div id="privatePeriodFields" class="mb-2">
+                                    <label class="form-label">Calendar period *</label>
+                                    <select name="calendar_period_id" id="calendarPeriodSelect" class="form-select" required>
+                                        <option value="">— Select —</option>
+                                        {% for p in calendar_periods %}
+                                        <option value="{{ p.id }}" {% if selected_calendar_id == p.id %}selected{% endif %}>{{ p.name }} ({{ p.start_date }} – {{ p.end_date }})</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text">
+                                        <a href="{{ url_for('goals.calendar_periods') }}">Manage calendar periods</a>
+                                        {% if not calendar_periods %}
+                                        <span class="text-warning d-block mt-1">Create at least one calendar period before saving a private lesson.</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <div id="schoolPeriodFields" class="mb-2" style="display:none;">
+                                    <label class="form-label">School term *</label>
+                                    <select name="school_term_id" class="form-select">
+                                        <option value="">— Select —</option>
+                                        {% for block in school_options %}
+                                            {% for t in block.terms %}
+                                            <option value="{{ t.id }}" data-school-id="{{ block.school.id }}" {% if selected_school_term_id == t.id %}selected{% endif %}>{{ block.school.name }} — {{ t.name }} ({{ t.start_date }} – {{ t.end_date }})</option>
+                                            {% endfor %}
+                                        {% endfor %}
+                                    </select>
+                                    <input type="hidden" name="school_id" id="noteSchoolId" value="">
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Basic Information Section -->
                         <div class="row mb-4">
                             <div class="col-md-8">
@@ -545,6 +595,37 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     noteEditor.init();
+
+    const trackPrivate = document.getElementById('trackPrivate');
+    const trackSchool = document.getElementById('trackSchool');
+    const privFields = document.getElementById('privatePeriodFields');
+    const schFields = document.getElementById('schoolPeriodFields');
+    const calSel = document.getElementById('calendarPeriodSelect');
+    const termSel = document.querySelector('select[name="school_term_id"]');
+    function syncLessonTrack() {
+        if (!trackPrivate || !trackSchool || !privFields || !schFields) return;
+        if (trackSchool.checked) {
+            privFields.style.display = 'none';
+            schFields.style.display = 'block';
+            if (calSel) calSel.removeAttribute('required');
+            if (termSel) termSel.setAttribute('required', 'required');
+        } else {
+            privFields.style.display = 'block';
+            schFields.style.display = 'none';
+            if (termSel) termSel.removeAttribute('required');
+            if (calSel) calSel.setAttribute('required', 'required');
+        }
+    }
+    if (trackPrivate) trackPrivate.addEventListener('change', syncLessonTrack);
+    if (trackSchool) trackSchool.addEventListener('change', syncLessonTrack);
+    syncLessonTrack();
+    if (termSel) {
+        termSel.addEventListener('change', function() {
+            const opt = this.options[this.selectedIndex];
+            const sid = document.getElementById('noteSchoolId');
+            if (sid && opt) sid.value = opt.getAttribute('data-school-id') || '';
+        });
+    }
 });
 </script>
 {% endblock %}

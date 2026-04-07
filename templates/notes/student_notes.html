@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ student.user.full_name }}'s Notes - Online Learning Notebook{% endblock %}
+{% block title %}{{ student.user.full_name }}'s Notes - Shajara{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -133,6 +133,8 @@
                 </div>
             </div>
             {% endif %}
+
+            {% include 'goals/_goal_panel.html' %}
         </div>
 
         <!-- Main Content - Notes List -->

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Teacher Dashboard - Online Learning Notebook{% endblock %}
+{% block title %}Teacher Dashboard - Shajara{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -10,18 +10,24 @@
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0"><i class="bi bi-people"></i> My Students</h5>
             </div>
-            <div class="card-body p-0">
+            <div class="card-body p-0 student-list">
                 <div class="list-group list-group-flush" style="max-height: 500px; overflow-y: auto;">
                     {% for student in students %}
                     <a href="{{ url_for('notes.student_notes', student_id=student.id) }}"
                        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-<!--                        Student ID={{ student.id }}-->
                         <div>
                             <strong>{{ student.user.full_name }}</strong>
                             <div class="text-muted small">@{{ student.user.username }}</div>
+                            {% if student_badges.get(student.id) %}
+                            <div class="mt-1">
+                                {% for label in student_badges[student.id] %}
+                                <span class="badge bg-light text-dark border me-1">{{ label }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
                         </div>
                         <span class="badge bg-primary rounded-pill">
-                            {{ student.notes|selectattr('student_id', 'equalto', student.id)|list|length }}
+                            {{ student_note_counts.get(student.id, 0) }}
                         </span>
                     </a>
                     {% else %}
@@ -49,10 +55,28 @@
                     <i class="bi bi-person-badge text-primary"></i> Welcome, {{ current_user.full_name }}!
                 </h3>
                 <p class="card-text">
-                    You have {{ students|length }} student(s) and {{ recent_notes|length }} recent notes.
+                    You have {{ students|length }} student(s) you can work with (private class and/or school assignments) and {{ recent_notes|length }} recent notes.
                 </p>
             </div>
         </div>
+
+        {% if school_rosters %}
+        <div class="card shadow-sm mb-4">
+            <div class="card-header py-2 bg-light">
+                <h6 class="mb-0"><i class="bi bi-building"></i> School programs</h6>
+            </div>
+            <div class="card-body py-2">
+                {% for block in school_rosters %}
+                {% if block.students %}
+                <div class="mb-2 {% if not loop.last %}border-bottom pb-2{% endif %}">
+                    <strong>{{ block.school.name }}</strong>
+                    <span class="text-muted small"> — {{ block.students|length }} student(s) assigned to you</span>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Recent Notes -->
         <div class="card shadow-sm">
@@ -134,15 +158,7 @@
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <h6 class="card-title">Signed Notes</h6>
-                                <h2 class="mb-0">
-                                    {% set signed = namespace(count=0) %}
-                                    {% for student in students %}
-                                        {% for note in student.notes %}
-                                            {% if note.signature %}{% set signed.count = signed.count + 1 %}{% endif %}
-                                        {% endfor %}
-                                    {% endfor %}
-                                    {{ signed.count }}
-                                </h2>
+                                <h2 class="mb-0">{{ signed_notes_count }}</h2>
                             </div>
                             <i class="bi bi-check-circle display-6"></i>
                         </div>
@@ -155,15 +171,7 @@
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <h6 class="card-title">Pending Notes</h6>
-                                <h2 class="mb-0">
-                                    {% set pending = namespace(count=0) %}
-                                    {% for student in students %}
-                                        {% for note in student.notes %}
-                                            {% if not note.signature %}{% set pending.count = pending.count + 1 %}{% endif %}
-                                        {% endfor %}
-                                    {% endfor %}
-                                    {{ pending.count }}
-                                </h2>
+                                <h2 class="mb-0">{{ pending_notes_count }}</h2>
                             </div>
                             <i class="bi bi-clock display-6"></i>
                         </div>

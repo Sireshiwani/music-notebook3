@@ -2,12 +2,27 @@ import uuid
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, session, current_app, Flask
 from flask_login import login_user, logout_user, login_required, current_user
 from urllib.parse import urlparse  # Fixed import
-from models import db, User, Teacher, Student, Parent, Note, NoteSignature
-from forms import LoginForm, StudentRegistrationForm, ParentRegistrationForm, TeacherRegistrationForm, NoteForm, \
+from models import db, User, Teacher, Student, Parent, Note, NoteSignature, StudentGoalSet, CalendarPeriod, SchoolTerm
+from goal_service import (
+    get_or_create_goal_set,
+    ensure_goal_set_created_audit,
+    note_context_valid,
+    teacher_school_options,
+    completion_percent,
+)
+from school_service import (
+    teacher_can_access_student,
+    teacher_accessible_students,
+    teacher_school_rosters,
+    teacher_student_badges,
+    teacher_accessible_student_ids,
+    hod_can_view_note,
+)
+from forms import LoginForm, StudentRegistrationForm, ParentRegistrationForm, TeacherRegistrationForm, HodRegistrationForm, NoteForm, \
     SignatureForm
 from datetime import datetime
 import os
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from services import FileUploadService
 
 # Blueprints
@@ -194,6 +209,36 @@ def register_teacher():
     return render_template('auth/register_teacher.html', form=form)
 
 
+@auth_bp.route('/register/hod', methods=['GET', 'POST'])
+def register_hod():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard.dashboard'))
+
+    form = HodRegistrationForm()
+    if form.validate_on_submit():
+        if User.query.filter_by(username=form.username.data).first():
+            flash('Username already exists', 'danger')
+            return redirect(url_for('auth.register_hod'))
+        if User.query.filter_by(email=form.email.data).first():
+            flash('Email already exists', 'danger')
+            return redirect(url_for('auth.register_hod'))
+
+        user = User(
+            username=form.username.data,
+            email=form.email.data,
+            full_name=form.full_name.data,
+            phone=form.phone.data,
+            role='hod',
+        )
+        user.set_password(form.password.data)
+        db.session.add(user)
+        db.session.commit()
+        flash('Registration successful! Please login.', 'success')
+        return redirect(url_for('auth.login'))
+
+    return render_template('auth/register_hod.html', form=form)
+
+
 # Teacher Management Routes
 @notes_bp.route('/teacher/students')
 @login_required
@@ -204,11 +249,34 @@ def teacher_students():
         return redirect(url_for('dashboard.dashboard'))
 
     teacher = current_user.teacher_profile
-    students = teacher.students if teacher else []
+    students = teacher_accessible_students(teacher) if teacher else []
+    school_rosters = teacher_school_rosters(teacher) if teacher else []
+    private_ids = {s.id for s in teacher.students} if teacher else set()
+    note_counts = {}
+    if teacher:
+        note_counts = dict(
+            db.session.query(Note.student_id, func.count(Note.id))
+            .filter(Note.teacher_id == teacher.id)
+            .group_by(Note.student_id)
+            .all()
+        )
+    total_notes = Note.query.filter_by(teacher_id=teacher.id).count() if teacher else 0
+    signed_notes = (
+        Note.query.join(NoteSignature).filter(Note.teacher_id == teacher.id).count() if teacher else 0
+    )
+    student_badges = teacher_student_badges(teacher) if teacher else {}
 
-    return render_template('teacher/students.html',
-                           students=students,
-                           teacher=teacher)
+    return render_template(
+        'teacher/students.html',
+        students=students,
+        school_rosters=school_rosters,
+        private_student_ids=private_ids,
+        teacher_student_note_counts=note_counts,
+        student_badges=student_badges,
+        total_notes=total_notes,
+        signed_notes=signed_notes,
+        teacher=teacher,
+    )
 
 
 @notes_bp.route('/teacher/add-student', methods=['GET', 'POST'])
@@ -262,15 +330,45 @@ def add_student():
 @dashboard_bp.route('/dashboard')
 @login_required
 def dashboard():
+    if current_user.role == 'hod':
+        return redirect(url_for('goals.hod_dashboard'))
+
     if current_user.role == 'teacher':
         teacher = current_user.teacher_profile
-        students = teacher.students if teacher else []
+        students = teacher_accessible_students(teacher) if teacher else []
+        school_rosters = teacher_school_rosters(teacher) if teacher else []
+        student_note_counts = {}
+        if teacher:
+            student_note_counts = dict(
+                db.session.query(Note.student_id, func.count(Note.id))
+                .filter(Note.teacher_id == teacher.id)
+                .group_by(Note.student_id)
+                .all()
+            )
         recent_notes = Note.query.filter_by(teacher_id=teacher.id).order_by(Note.date.desc()).limit(
             10).all() if teacher else []
+        signed_notes_count = (
+            Note.query.filter(Note.teacher_id == teacher.id).filter(Note.signature.has()).count()
+            if teacher
+            else 0
+        )
+        pending_notes_count = (
+            Note.query.filter(Note.teacher_id == teacher.id).filter(~Note.signature.has()).count()
+            if teacher
+            else 0
+        )
+        student_badges = teacher_student_badges(teacher) if teacher else {}
 
-        return render_template('dashboard/teacher.html',
-                               students=students,
-                               recent_notes=recent_notes)
+        return render_template(
+            'dashboard/teacher.html',
+            students=students,
+            school_rosters=school_rosters,
+            student_note_counts=student_note_counts,
+            student_badges=student_badges,
+            recent_notes=recent_notes,
+            signed_notes_count=signed_notes_count,
+            pending_notes_count=pending_notes_count,
+        )
 
     elif current_user.role == 'student':
         student = current_user.student_profile
@@ -278,9 +376,31 @@ def dashboard():
         recent_notes = Note.query.filter_by(student_id=student.id).order_by(Note.date.desc()).limit(
             10).all() if student else []
 
-        return render_template('dashboard/student.html',
-                               teachers=teachers,
-                               recent_notes=recent_notes)
+        student_goal_summary = []
+        if student:
+            for gs in (
+                StudentGoalSet.query.filter_by(student_id=student.id)
+                .order_by(StudentGoalSet.updated_at.desc())
+                .all()
+            ):
+                pct = completion_percent(gs)
+                items = sorted(gs.rubric_items, key=lambda x: (x.sort_order, x.id))
+                student_goal_summary.append(
+                    {
+                        "goal_set": gs,
+                        "percent": pct,
+                        "done_count": sum(1 for i in items if i.is_completed),
+                        "total_count": len(items),
+                        "slots": gs.five_slots(),
+                    }
+                )
+
+        return render_template(
+            'dashboard/student.html',
+            teachers=teachers,
+            recent_notes=recent_notes,
+            student_goal_summary=student_goal_summary,
+        )
 
     elif current_user.role == 'parent':
         parent = current_user.parent_profile
@@ -290,9 +410,33 @@ def dashboard():
             child_notes = Note.query.filter_by(student_id=child.id).order_by(Note.date.desc()).limit(5).all()
             notes.extend(child_notes)
 
-        return render_template('dashboard/parent.html',
-                               children=children,
-                               notes=notes[:10])
+        children_goal_summaries = []
+        for child in children:
+            summaries = []
+            for gs in (
+                StudentGoalSet.query.filter_by(student_id=child.id)
+                .order_by(StudentGoalSet.updated_at.desc())
+                .all()
+            ):
+                pct = completion_percent(gs)
+                items = sorted(gs.rubric_items, key=lambda x: (x.sort_order, x.id))
+                summaries.append(
+                    {
+                        "goal_set": gs,
+                        "percent": pct,
+                        "done_count": sum(1 for i in items if i.is_completed),
+                        "total_count": len(items),
+                        "slots": gs.five_slots(),
+                    }
+                )
+            children_goal_summaries.append({"child": child, "summaries": summaries})
+
+        return render_template(
+            "dashboard/parent.html",
+            children=children,
+            notes=notes[:10],
+            children_goal_summaries=children_goal_summaries,
+        )
 
 
 # Notes Routes
@@ -304,16 +448,37 @@ def student_notes(student_id):
         teacher = current_user.teacher_profile
         student = Student.query.get_or_404(student_id)
 
-        # Check if teacher is assigned to this student
-        if student not in teacher.students:
+        if not teacher_can_access_student(teacher, student):
             flash('Not authorized to view this student\'s notes', 'danger')
             return redirect(url_for('dashboard.dashboard'))
 
+        cp_open = request.args.get('calendar_period_id', type=int)
+        st_open = request.args.get('school_term_id', type=int)
+        if cp_open:
+            gs, cr = get_or_create_goal_set(student.id, teacher.id, calendar_period_id=cp_open)
+            if cr:
+                ensure_goal_set_created_audit(gs, current_user.id)
+            db.session.commit()
+        elif st_open:
+            gs, cr = get_or_create_goal_set(student.id, teacher.id, school_term_id=st_open)
+            if cr:
+                ensure_goal_set_created_audit(gs, current_user.id)
+            db.session.commit()
+
         notes = Note.query.filter_by(student_id=student_id, teacher_id=teacher.id).order_by(Note.date.desc()).all()
+        goal_sets = StudentGoalSet.query.filter_by(
+            student_id=student_id, teacher_id=teacher.id
+        ).order_by(StudentGoalSet.updated_at.desc()).all()
+        goal_meta = [(gs, completion_percent(gs)) for gs in goal_sets]
+        calendar_periods = CalendarPeriod.query.order_by(CalendarPeriod.start_date.desc()).all()
+        school_options = teacher_school_options(teacher.id)
 
         return render_template('notes/student_notes.html',
                                student=student,
-                               notes=notes)
+                               notes=notes,
+                               goal_sets_meta=goal_meta,
+                               calendar_periods=calendar_periods,
+                               school_options=school_options)
 
     elif current_user.role == 'student':
         if current_user.student_profile.id != student_id:
@@ -322,10 +487,17 @@ def student_notes(student_id):
 
         student = current_user.student_profile
         notes = Note.query.filter_by(student_id=student_id).order_by(Note.date.desc()).all()
+        goal_sets = StudentGoalSet.query.filter_by(student_id=student_id).order_by(
+            StudentGoalSet.updated_at.desc()
+        ).all()
+        goal_meta = [(gs, completion_percent(gs)) for gs in goal_sets]
 
         return render_template('notes/student_notes.html',
                                student=student,
-                               notes=notes)
+                               notes=notes,
+                               goal_sets_meta=goal_meta,
+                               calendar_periods=[],
+                               school_options=[])
 
     elif current_user.role == 'parent':
         parent = current_user.parent_profile
@@ -337,10 +509,17 @@ def student_notes(student_id):
             return redirect(url_for('dashboard.dashboard'))
 
         notes = Note.query.filter_by(student_id=student_id).order_by(Note.date.desc()).all()
+        goal_sets = StudentGoalSet.query.filter_by(student_id=student_id).order_by(
+            StudentGoalSet.updated_at.desc()
+        ).all()
+        goal_meta = [(gs, completion_percent(gs)) for gs in goal_sets]
 
         return render_template('notes/student_notes.html',
                                student=student,
-                               notes=notes)
+                               notes=notes,
+                               goal_sets_meta=goal_meta,
+                               calendar_periods=[],
+                               school_options=[])
 
 
 @notes_bp.route('/note/add/<int:student_id>', methods=['GET', 'POST'])
@@ -353,48 +532,97 @@ def add_note(student_id):
     teacher = current_user.teacher_profile
     student = Student.query.get_or_404(student_id)
 
-    # Check if teacher is assigned to this student
-    if student not in teacher.students:
+    if not teacher_can_access_student(teacher, student):
         flash('Not authorized to add notes for this student', 'danger')
         return redirect(url_for('dashboard.dashboard'))
 
     form = NoteForm()
 
+    calendar_periods = CalendarPeriod.query.order_by(CalendarPeriod.start_date.desc()).all()
+    school_options = teacher_school_options(teacher.id)
+
+    cp_q = request.args.get('calendar_period_id', type=int)
+    st_q = request.args.get('school_term_id', type=int)
+
     if request.method == 'POST':
         try:
+            lesson_track = (request.form.get('lesson_track') or 'private').strip()
+            cal_id = request.form.get('calendar_period_id', type=int)
+            school_term_id = request.form.get('school_term_id', type=int)
+            school_id = request.form.get('school_id', type=int)
+
+            if lesson_track == 'private':
+                school_id = None
+                school_term_id = None
+                if not cal_id:
+                    flash('Select a calendar period for private lessons.', 'danger')
+                    return render_template(
+                        'notes/add_note.html',
+                        form=form,
+                        student=student,
+                        calendar_periods=calendar_periods,
+                        school_options=school_options,
+                        selected_calendar_id=cal_id,
+                        selected_school_term_id=None,
+                    )
+            else:
+                cal_id = None
+                if not school_term_id:
+                    flash('Select a school term for school lessons.', 'danger')
+                    return render_template(
+                        'notes/add_note.html',
+                        form=form,
+                        student=student,
+                        calendar_periods=calendar_periods,
+                        school_options=school_options,
+                        selected_calendar_id=None,
+                        selected_school_term_id=school_term_id,
+                    )
+                term = SchoolTerm.query.get(school_term_id)
+                school_id = term.school_id if term else None
+
+            ok_ctx, err_msg = note_context_valid(
+                school_id=school_id,
+                school_term_id=school_term_id,
+                calendar_period_id=cal_id,
+                teacher_id=teacher.id,
+                student_id=student.id,
+            )
+            if not ok_ctx:
+                flash(err_msg or 'Invalid lesson context.', 'danger')
+                return render_template(
+                    'notes/add_note.html',
+                    form=form,
+                    student=student,
+                    calendar_periods=calendar_periods,
+                    school_options=school_options,
+                    selected_calendar_id=cal_id,
+                    selected_school_term_id=school_term_id,
+                )
 
             # Use app context explicitly
             with current_app.app_context():
-                # Get the service
                 file_service = FileUploadService(current_app)
 
-                # Initialize file names
                 audio_filename = None
                 document_filename = None
                 image_filename = None
 
-                # Handle audio recording (from base64)
                 if 'audio_data' in request.form and request.form['audio_data']:
-                    # file_service = FileUploadService(current_app)
                     audio_filename = file_service.save_audio(request.form['audio_data'])
 
-                # Handle document upload
                 if form.document_file.data:
-                    # file_service = FileUploadService(current_app)
                     document_filename = file_service.save_uploaded_file(
                         form.document_file.data,
                         file_type='document'
                     )
 
-                # Handle image upload
                 if form.image_file.data:
-                    # file_service = FileUploadService(current_app)
                     image_filename = file_service.save_uploaded_file(
                         form.image_file.data,
                         file_type='image'
                     )
 
-                # Create note with all attachments
                 note = Note(
                     title=form.title.data,
                     content=form.content.data,
@@ -404,7 +632,10 @@ def add_note(student_id):
                     image_filename=image_filename,
                     teacher_id=teacher.id,
                     student_id=student.id,
-                    date=datetime.utcnow()
+                    date=datetime.utcnow(),
+                    school_id=school_id,
+                    school_term_id=school_term_id,
+                    calendar_period_id=cal_id,
                 )
 
                 db.session.add(note)
@@ -418,7 +649,15 @@ def add_note(student_id):
         except Exception as e:
             db.session.rollback()
             flash(f'Error saving note: {str(e)}', 'danger')
-    return render_template('notes/add_note.html', form=form, student=student)
+    return render_template(
+        'notes/add_note.html',
+        form=form,
+        student=student,
+        calendar_periods=calendar_periods,
+        school_options=school_options,
+        selected_calendar_id=cp_q,
+        selected_school_term_id=st_q,
+    )
 
 
 @notes_bp.route('/note/<int:note_id>/edit', methods=['GET', 'POST'])
@@ -479,6 +718,11 @@ def view_note(note_id):
         if note.teacher_id != current_user.teacher_profile.id:
             flash('Not authorized to view this note', 'danger')
             return redirect(url_for('dashboard.dashboard'))
+
+    elif current_user.role == 'hod':
+        if not hod_can_view_note(current_user, note):
+            flash('Not authorized to view this note', 'danger')
+            return redirect(url_for('goals.hod_dashboard'))
 
     elif current_user.role == 'student':
         if note.student_id != current_user.student_profile.id:
@@ -761,7 +1005,7 @@ def remove_student_from_teacher(student_id):
 def get_dashboard_stats():
     if current_user.role == 'teacher':
         teacher = current_user.teacher_profile
-        students = teacher.students
+        n_students = len(teacher_accessible_student_ids(teacher))
 
         # Count notes
         total_notes = Note.query.filter_by(teacher_id=teacher.id).count()
@@ -770,7 +1014,7 @@ def get_dashboard_stats():
         return jsonify({
             'success': True,
             'stats': {
-                'total_students': len(students),
+                'total_students': n_students,
                 'total_notes': total_notes,
                 'signed_notes': signed_notes,
                 'pending_notes': total_notes - signed_notes
@@ -789,6 +1033,9 @@ def get_note_signature(note_id):
     # Authorization check
     if current_user.role == 'teacher':
         if note.teacher_id != current_user.teacher_profile.id:
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    elif current_user.role == 'hod':
+        if not hod_can_view_note(current_user, note):
             return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     elif current_user.role == 'student':
         if note.student_id != current_user.student_profile.id:
@@ -818,8 +1065,7 @@ def request_signatures(student_id):
     teacher = current_user.teacher_profile
     student = Student.query.get_or_404(student_id)
 
-    # Check if student is assigned to this teacher
-    if student not in teacher.students:
+    if not teacher_can_access_student(teacher, student):
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
 
     # Get unsigned notes
@@ -945,7 +1191,7 @@ def get_student_parents(student_id):
 
     # Authorization check
     if current_user.role == 'teacher':
-        if student not in current_user.teacher_profile.students:
+        if not teacher_can_access_student(current_user.teacher_profile, student):
             return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     elif current_user.role == 'student':
         if student.id != current_user.student_profile.id:

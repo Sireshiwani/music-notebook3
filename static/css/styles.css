@@ -35,6 +35,37 @@ body {
     margin-right: 0.5rem;
 }
 
+/* Shajara logo — a bit larger than the first version (was max-height 52px / max-width 220px) */
+.navbar-brand-logo {
+    display: block;
+    height: auto;
+    max-height: 64px;
+    width: auto;
+    max-width: min(260px, 58vw);
+    object-fit: contain;
+}
+
+@media (max-width: 576px) {
+    .navbar-brand-logo {
+        max-height: 48px;
+        max-width: min(200px, 68vw);
+    }
+}
+
+/* Goals panel (narrow sidebar on student notes) */
+.goal-panel-sidebar .nav-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+}
+.goal-panel-sidebar .nav-tabs .nav-link {
+    font-size: 0.7rem;
+    padding: 0.35rem 0.45rem;
+    white-space: nowrap;
+}
+.goal-panel-sidebar .card-header h5 {
+    font-size: 0.95rem;
+}
+
 /* ===== Card Styles ===== */
 .card {
     border: none;

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}{{ school.name }} - HOD{% endblock %}
+{% block content %}
+<div class="container py-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('goals.hod_dashboard') }}">HOD</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('goals.hod_schools') }}">Schools</a></li>
+            <li class="breadcrumb-item active">{{ school.name }}</li>
+        </ol>
+    </nav>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <h2 class="mb-0">{{ school.name }}</h2>
+        <a href="{{ url_for('goals.hod_school_lessons', school_id=school.id) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-journal-text"></i> School lessons (notes)
+        </a>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">School terms</div>
+        <div class="card-body">
+            <form method="post" action="{{ url_for('goals.hod_school_term_add', school_id=school.id) }}" class="row g-2 align-items-end mb-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="col-md-3"><input type="text" name="name" class="form-control" placeholder="Term name" required></div>
+                <div class="col-md-3"><input type="date" name="start_date" class="form-control" required></div>
+                <div class="col-md-3"><input type="date" name="end_date" class="form-control" required></div>
+                <div class="col-md-3"><button type="submit" class="btn btn-primary">Add term</button></div>
+            </form>
+            <ul class="list-group list-group-flush">
+                {% for t in terms %}
+                <li class="list-group-item">{{ t.name }} — {{ t.start_date }} to {{ t.end_date }}</li>
+                {% else %}
+                <li class="list-group-item text-muted">No terms.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header">Add teacher</div>
+                <div class="card-body">
+                    <form method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" name="action" value="add_teacher"/>
+                        <input type="text" name="teacher_username" class="form-control mb-2" placeholder="Teacher username" required>
+                        <button type="submit" class="btn btn-outline-primary btn-sm">Add</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header">Add student</div>
+                <div class="card-body">
+                    <form method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" name="action" value="add_student"/>
+                        <input type="text" name="student_username" class="form-control mb-2" placeholder="Student username" required>
+                        <button type="submit" class="btn btn-outline-primary btn-sm">Add</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">Teachers in this school</div>
+        <ul class="list-group list-group-flush">
+            {% for t in teachers_list %}
+            <li class="list-group-item">{{ t.user.full_name }} (@{{ t.user.username }})</li>
+            {% else %}
+            <li class="list-group-item text-muted">None yet.</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">Students in this school</div>
+        <ul class="list-group list-group-flush">
+            {% for st in students_list %}
+            <li class="list-group-item">{{ st.user.full_name }} (@{{ st.user.username }})</li>
+            {% else %}
+            <li class="list-group-item text-muted">None yet.</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">Assign student → teacher (within school)</div>
+        <div class="card-body">
+            <form method="post" class="row g-2 align-items-end">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="action" value="assign"/>
+                <div class="col-md-5">
+                    <label class="form-label">Teacher</label>
+                    <select name="teacher_id" class="form-select" required>
+                        <option value="">—</option>
+                        {% for t in teachers_list %}
+                        <option value="{{ t.id }}">{{ t.user.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Student</label>
+                    <select name="student_id" class="form-select" required>
+                        <option value="">—</option>
+                        {% for st in students_list %}
+                        <option value="{{ st.id }}">{{ st.user.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-success w-100">Assign</button>
+                </div>
+            </form>
+            <hr/>
+            <p class="small text-muted mb-1">Current assignments</p>
+            <ul class="small">
+                {% for a in assignments %}
+                <li>{{ a.teacher.user.full_name }} → {{ a.student.user.full_name }}</li>
+                {% else %}
+                <li class="text-muted">None.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

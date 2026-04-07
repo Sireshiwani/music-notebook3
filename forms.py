@@ -58,6 +58,17 @@ class ParentRegistrationForm(FlaskForm):
     student_username = StringField('Student Username', validators=[DataRequired()])
 
 
+class HodRegistrationForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired(), Length(min=3, max=80)])
+    email = StringField('Email', validators=[DataRequired(), EmailValidator()])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=6)])
+    confirm_password = PasswordField(
+        'Confirm Password', validators=[DataRequired(), EqualTo('password')]
+    )
+    full_name = StringField('Full Name', validators=[DataRequired(), Length(min=2, max=120)])
+    phone = StringField('Phone Number', validators=[DataRequired()])
+
+
 class TeacherRegistrationForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired(), Length(min=3, max=80)])
     email = StringField('Email', validators=[DataRequired(), EmailValidator()])

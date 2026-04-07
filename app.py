@@ -3,6 +3,8 @@ from flask_login import LoginManager
 from config import Config
 from models import db
 from routes import auth_bp, notes_bp, dashboard_bp
+from goal_routes import goals_bp
+from schema_migrate import ensure_sqlite_schema
 import os
 from flask_wtf import CSRFProtect
 from services import FileUploadService
@@ -23,6 +25,7 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(notes_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(goals_bp)
 
     # Custom Jinja2 filter for nl2br
     @app.template_filter('nl2br')
@@ -39,9 +42,10 @@ def create_app():
     def load_user(user_id):
         return User.query.get(int(user_id))
 
-    # Create tables
+    # Create tables + upgrade SQLite columns on existing DBs
     with app.app_context():
         db.create_all()
+        ensure_sqlite_schema(db, app)
         Config.init_app(app)
 
     # Error handlers

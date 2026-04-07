@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Parent Dashboard - Online Learning Notebook{% endblock %}
+{% block title %}Parent Dashboard - Shajara{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -35,10 +35,10 @@
             </div>
         </div>
 
-        <!-- Quick Stats -->
+        <!-- Quick Stats + goals (overview) -->
         <div class="card shadow-sm mt-4">
             <div class="card-body">
-                <h6 class="card-title">Overview</h6>
+                <h6 class="card-title fw-bold mb-3">Overview</h6>
                 <div class="d-flex justify-content-between mb-2">
                     <span>Total Children:</span>
                     <strong>{{ children|length }}</strong>
@@ -47,7 +47,7 @@
                     <span>Total Notes:</span>
                     <strong>{{ notes|length }}</strong>
                 </div>
-                <div class="d-flex justify-content-between">
+                <div class="d-flex justify-content-between mb-2">
                     <span>Signed Notes:</span>
                     <strong>
                         {% set signed = namespace(count=0) %}
@@ -57,6 +57,73 @@
                         {{ signed.count }}
                     </strong>
                 </div>
+
+                {% if children %}
+                <hr class="my-3">
+                <p class="fw-semibold small mb-2">Current goals</p>
+                <div class="parent-overview-goals small" style="max-height: 420px; overflow-y: auto;">
+                    {% for block in children_goal_summaries|default([]) %}
+                    <div class="mb-3 pb-3 {% if not loop.last %}border-bottom border-light{% endif %}">
+                        <div class="fw-bold text-body mb-2">{{ block.child.user.full_name }}</div>
+                        {% if block.summaries %}
+                            {% for row in block.summaries %}
+                            {% set gs = row.goal_set %}
+                            <div class="mb-3 pb-2 {% if not loop.last %}border-bottom border-light{% endif %}">
+                                <div class="text-muted mb-1" style="font-size: 0.8rem;">
+                                    {% if gs.calendar_period_id and gs.calendar_period %}
+                                    <span class="badge bg-secondary">Private</span>
+                                    {{ gs.calendar_period.name }}
+                                    {% elif gs.school_term_id and gs.school_term %}
+                                    <span class="badge bg-info text-dark">School</span>
+                                    {{ gs.school_term.school.name }} — {{ gs.school_term.name }}
+                                    {% else %}
+                                    <span class="badge bg-light text-dark border">Goals</span>
+                                    {% endif %}
+                                </div>
+                                <div class="mb-1" style="font-size: 0.8rem;">
+                                    <i class="bi bi-person-badge"></i> {{ gs.teacher.user.full_name }}
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="fw-semibold">Progress</span>
+                                    <span>{{ row.percent }}%</span>
+                                </div>
+                                <div class="progress mb-2" style="height: 6px;">
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ row.percent }}%"></div>
+                                </div>
+                                <div class="text-muted mb-2" style="font-size: 0.75rem;">
+                                    <strong class="text-dark">{{ row.done_count }}</strong> of
+                                    <strong class="text-dark">{{ row.total_count }}</strong> goals completed
+                                </div>
+                                <ul class="list-unstyled mb-2 ps-0" style="font-size: 0.75rem;">
+                                    {% for n in [1,2,3,4,5] %}
+                                    {% set item = row.slots[n - 1] %}
+                                    <li class="py-1 border-bottom border-light">
+                                        <span class="text-muted me-1">{{ n }}.</span>
+                                        {% if item and item.text %}
+                                            {% if item.is_completed %}
+                                            <i class="bi bi-check-circle-fill text-success" title="Done"></i>
+                                            {% else %}
+                                            <i class="bi bi-circle text-muted" title="Not done"></i>
+                                            {% endif %}
+                                            {{ item.text }}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                        <p class="text-muted mb-0" style="font-size: 0.8rem;">No term goals yet. Teachers add goals by period or school term.</p>
+                        {% endif %}
+                        <a href="{{ url_for('notes.student_notes', student_id=block.child.id) }}" class="btn btn-sm btn-outline-primary w-100 mt-1">
+                            Open notes &amp; goals
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

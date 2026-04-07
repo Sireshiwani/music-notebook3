@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Calendar periods - Shajara{% endblock %}
+{% block content %}
+<div class="container py-3">
+    <h2><i class="bi bi-calendar3"></i> Calendar periods (private lessons)</h2>
+    <p class="text-muted">Create periods to group private lessons and goals (e.g. Jan–Mar 2026).</p>
+
+    <div class="row">
+        <div class="col-md-5 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header">New period</div>
+                <div class="card-body">
+                    <form method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="mb-2">
+                            <label class="form-label">Name</label>
+                            <input type="text" name="name" class="form-control" required placeholder="e.g. Term 1 2026">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Start</label>
+                            <input type="date" name="start_date" class="form-control" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">End</label>
+                            <input type="date" name="end_date" class="form-control" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-7">
+            <div class="card shadow-sm">
+                <div class="card-header">Existing periods</div>
+                <ul class="list-group list-group-flush">
+                    {% for p in periods %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ p.name }}</strong>
+                            <span class="text-muted small">{{ p.start_date }} – {{ p.end_date }}</span>
+                        </div>
+                        <form method="post" action="{{ url_for('goals.delete_calendar_period', period_id=p.id) }}" onsubmit="return confirm('Delete this period?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                        </form>
+                    </li>
+                    {% else %}
+                    <li class="list-group-item text-muted">No periods yet.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

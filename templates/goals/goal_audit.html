@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Goal audit - Shajara{% endblock %}
+{% block content %}
+<div class="container py-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('notes.student_notes', student_id=student.id) }}">{{ student.user.full_name }}</a></li>
+            <li class="breadcrumb-item active">Goal audit</li>
+        </ol>
+    </nav>
+    <h2>Goal change history</h2>
+    <p class="text-muted">Completion: <strong>{{ completion_pct }}%</strong></p>
+    <div class="table-responsive">
+        <table class="table table-sm table-striped">
+            <thead><tr><th>When (UTC)</th><th>Who</th><th>Action</th><th>Summary</th></tr></thead>
+            <tbody>
+                {% for e in entries %}
+                <tr>
+                    <td>{{ e.created_at }}</td>
+                    <td>{{ e.actor.full_name if e.actor else e.actor_user_id }}</td>
+                    <td><code>{{ e.action }}</code></td>
+                    <td>{{ e.summary }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="text-muted">No entries.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <a href="{{ url_for('notes.student_notes', student_id=student.id) }}" class="btn btn-outline-secondary">Back</a>
+</div>
+{% endblock %}
