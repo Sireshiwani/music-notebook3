@@ -1267,6 +1267,9 @@ def share_note(note_id):
     })
 
 
+('/health')
+def health():
+    return()
 
 # Error handlers
 @auth_bp.errorhandler(404)

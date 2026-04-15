@@ -10,3 +10,6 @@ ffmpeg-python==0.2.0
 # Pillow removed for now
 # python-magic for file type detection (optional)
 python-magic==0.4.27
+Flask-Migrate
+psycopg2-binary
+gunicorn
