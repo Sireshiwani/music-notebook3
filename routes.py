@@ -1267,9 +1267,12 @@ def share_note(note_id):
     })
 
 
-('/health')
+
+@auth_bp.route('/health', methods=['GET'])
 def health():
-    return()
+    """Lightweight health endpoint for deploy checks."""
+    return jsonify({'status': 'ok'}), 200
+
 
 # Error handlers
 @auth_bp.errorhandler(404)
