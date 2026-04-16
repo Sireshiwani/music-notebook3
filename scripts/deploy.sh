@@ -28,19 +28,46 @@ pip install --upgrade pip
 pip install -r requirements.txt
 pip install flask-migrate psycopg2-binary gunicorn
 
-echo "[5/8] Run database migrations"
+echo "[5/8] Ensure app.py has Flask-Migrate wiring"
+python3 - <<'PY'
+from pathlib import Path
+
+p = Path("app.py")
+s = p.read_text()
+
+if "from flask_migrate import Migrate" not in s:
+    s = s.replace(
+        "from flask_wtf import CSRFProtect",
+        "from flask_wtf import CSRFProtect\nfrom flask_migrate import Migrate",
+    )
+
+if "Migrate(app, db)" not in s:
+    s = s.replace(
+        "    db.init_app(app)",
+        "    db.init_app(app)\n    Migrate(app, db)",
+    )
+
+p.write_text(s)
+print("Flask-Migrate wiring ensured")
+PY
+
+echo "[6/8] Run database migrations"
 export FLASK_APP=app:create_app
+if [ ! -d "migrations" ]; then
+  flask db init
+  flask db migrate -m "baseline schema"
+fi
 flask db upgrade
 
-echo "[6/8] Restart app service"
+echo "[7/8] Restart app service"
 systemctl daemon-reload
 systemctl restart "$SERVICE_NAME"
 
-echo "[7/8] Wait for service"
+echo "[8/8] Wait for service"
 sleep 2
 systemctl is-active --quiet "$SERVICE_NAME"
 
-echo "[8/8] Health check"
+echo "[9/8] Health check"
 curl -fsS "$HEALTH_URL" >/dev/null
 
 echo "Deploy successful"
