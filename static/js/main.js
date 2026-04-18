@@ -19,6 +19,39 @@ function pickRecorderMimeTypeForMain() {
     return '';
 }
 
+function buildRecorderOptionsForMain(mimeType) {
+    const opts = {};
+    if (!mimeType) {
+        return opts;
+    }
+    opts.mimeType = mimeType;
+    if (mimeType.includes('webm')) {
+        opts.audioBitsPerSecond = 64000;
+    }
+    return opts;
+}
+
+function createBestMediaRecorderForMain(stream) {
+    const order = [
+        'audio/mp4',
+        'audio/mp4; codecs=mp4a.40.2',
+        'audio/webm; codecs=opus',
+        'audio/webm',
+    ];
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+        for (const mime of order) {
+            if (!MediaRecorder.isTypeSupported(mime)) continue;
+            try {
+                const opts = buildRecorderOptionsForMain(mime);
+                return new MediaRecorder(stream, opts);
+            } catch (_) {
+                /* try next mime */
+            }
+        }
+    }
+    return new MediaRecorder(stream);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize tooltips
     initTooltips();
@@ -164,64 +197,86 @@ function initAudioRecorder() {
     stopBtn.addEventListener('click', stopRecording);
 
     async function startRecording() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                },
-            });
+        if (isRecording) {
+            return;
+        }
 
-            const mimeType = pickRecorderMimeTypeForMain();
-            const opts =
-                mimeType &&
-                (mimeType.includes('webm')
-                    ? { mimeType, audioBitsPerSecond: 64000 }
-                    : { mimeType });
-            mediaRecorder = opts ? new MediaRecorder(stream, opts) : new MediaRecorder(stream);
-            recordedMimeType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+        if (typeof MediaRecorder === 'undefined') {
+            updateRecordingStatus(
+                'Recording not supported in this browser — update iOS or use Safari/Chrome.',
+                'error'
+            );
+            return;
+        }
+
+        let stream = null;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            mediaRecorder = createBestMediaRecorderForMain(stream);
+            recordedMimeType =
+                mediaRecorder.mimeType ||
+                pickRecorderMimeTypeForMain() ||
+                'audio/webm';
             audioChunks = [];
 
-            mediaRecorder.ondataavailable = event => {
+            mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) {
                     audioChunks.push(event.data);
                 }
+            };
+
+            mediaRecorder.onerror = (event) => {
+                console.error('MediaRecorder error:', event.error);
+                updateRecordingStatus(
+                    event.error && event.error.message
+                        ? event.error.message
+                        : 'Recording error',
+                    'error'
+                );
             };
 
             mediaRecorder.onstop = () => {
                 const audioBlob = new Blob(audioChunks, { type: recordedMimeType });
                 const audioUrl = URL.createObjectURL(audioBlob);
 
-                // Update preview
                 audioPreview.src = audioUrl;
                 audioPreview.classList.remove('d-none');
 
-                // Convert to base64 for form submission
                 const reader = new FileReader();
                 reader.onload = function() {
                     audioDataInput.value = reader.result;
                 };
                 reader.readAsDataURL(audioBlob);
 
-                // Stop all tracks
-                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                mediaRecorder.stream.getTracks().forEach((track) => track.stop());
 
                 updateRecordingStatus('Recording saved successfully!', 'success');
                 startBtn.disabled = false;
                 stopBtn.disabled = true;
             };
 
-            mediaRecorder.start();
+            mediaRecorder.start(250);
             isRecording = true;
 
             updateRecordingStatus('Recording...', 'recording');
             startBtn.disabled = true;
             stopBtn.disabled = false;
-
         } catch (error) {
+            if (stream) {
+                stream.getTracks().forEach((t) => t.stop());
+            }
             console.error('Error starting recording:', error);
-            updateRecordingStatus('Microphone access denied or not available', 'error');
+            let msg = 'Microphone unavailable';
+            if (error && error.name === 'NotAllowedError') {
+                msg =
+                    'Microphone blocked — allow mic for this site in browser settings.';
+            } else if (error && error.name === 'NotFoundError') {
+                msg = 'No microphone found.';
+            } else if (error && error.message) {
+                msg = error.message;
+            }
+            updateRecordingStatus(msg, 'error');
         }
     }
 

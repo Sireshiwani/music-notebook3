@@ -23,13 +23,38 @@ function pickRecorderMimeType() {
 
 function buildRecorderOptions(mimeType) {
     const opts = {};
-    if (mimeType) {
-        opts.mimeType = mimeType;
+    if (!mimeType) {
+        return opts;
     }
+    opts.mimeType = mimeType;
     if (mimeType.includes('webm')) {
         opts.audioBitsPerSecond = 64000;
     }
     return opts;
+}
+
+/**
+ * Try supported mime types until MediaRecorder accepts one (Safari/iOS differs by version).
+ */
+function createBestMediaRecorder(stream) {
+    const order = [
+        'audio/mp4',
+        'audio/mp4; codecs=mp4a.40.2',
+        'audio/webm; codecs=opus',
+        'audio/webm',
+    ];
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+        for (const mime of order) {
+            if (!MediaRecorder.isTypeSupported(mime)) continue;
+            try {
+                const opts = buildRecorderOptions(mime);
+                return new MediaRecorder(stream, opts);
+            } catch (_) {
+                /* try next mime */
+            }
+        }
+    }
+    return new MediaRecorder(stream);
 }
 
 class NoteEditor {
@@ -133,32 +158,38 @@ class NoteEditor {
     }
 
     async startRecording() {
+        if (this.isRecording) {
+            return;
+        }
+
+        if (typeof MediaRecorder === 'undefined') {
+            this.showMessage(
+                'Recording is not supported in this browser. Try Safari or Chrome, or update iOS.',
+                'danger'
+            );
+            return;
+        }
+
+        let stream = null;
         try {
-            // iOS: AudioContext starts suspended until a user gesture — resume on Record tap
-            if (this.audioContext && this.audioContext.state === 'suspended') {
-                await this.audioContext.resume();
+            // iOS Safari: user activation for the mic must not be preceded by another await
+            // (e.g. AudioContext.resume). Request the mic first, then resume the visualizer context.
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            try {
+                if (this.audioContext && this.audioContext.state === 'suspended') {
+                    await this.audioContext.resume();
+                }
+            } catch (_) {
+                /* visualizer-only; recording still works */
             }
 
-            // Avoid sampleRate / strict constraints — mobile often throws OverconstrainedError
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                },
-            });
-
-            const mimeType = pickRecorderMimeType();
-            const recorderOpts = buildRecorderOptions(mimeType);
-
-            // Initialize MediaRecorder (Safari/iOS needs MP4, not WebM)
-            this.mediaRecorder = new MediaRecorder(stream, recorderOpts);
+            this.mediaRecorder = createBestMediaRecorder(stream);
             this.recordedMimeType =
                 this.mediaRecorder.mimeType ||
-                mimeType ||
+                pickRecorderMimeType() ||
                 'audio/webm';
 
-            // Set up data handler
             this.audioChunks = [];
             this.mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) {
@@ -167,32 +198,54 @@ class NoteEditor {
                 }
             };
 
-            // Set up stop handler
-            this.mediaRecorder.onstop = () => {
-                this.saveRecording();
-                stream.getTracks().forEach(track => track.stop());
+            this.mediaRecorder.onerror = (event) => {
+                console.error('MediaRecorder error:', event.error);
+                const msg =
+                    event.error && event.error.message
+                        ? event.error.message
+                        : 'Recording failed on this device';
+                this.showMessage(msg, 'danger');
             };
 
-            // Connect to analyser for visualizer
-            if (this.audioContext && this.analyser) {
-                this.audioSource = this.audioContext.createMediaStreamSource(stream);
-                this.audioSource.connect(this.analyser);
-                this.startVisualizer();
+            this.mediaRecorder.onstop = () => {
+                this.saveRecording();
+                stream.getTracks().forEach((track) => track.stop());
+            };
+
+            try {
+                if (this.audioContext && this.analyser) {
+                    this.audioSource = this.audioContext.createMediaStreamSource(stream);
+                    this.audioSource.connect(this.analyser);
+                    this.startVisualizer();
+                }
+            } catch (visErr) {
+                console.warn('Audio visualizer skipped:', visErr);
             }
 
-            // Start recording
-            this.mediaRecorder.start(1000); // Collect data every second
+            // Frequent slices — some mobile browsers omit chunks until stop if the slice is too large
+            this.mediaRecorder.start(250);
+
             this.isRecording = true;
             this.isPaused = false;
             this.recordingStartTime = Date.now();
 
-            // Update UI
             this.updateRecordingUI(true);
             this.startTimer();
-
         } catch (error) {
+            if (stream) {
+                stream.getTracks().forEach((t) => t.stop());
+            }
             console.error('Recording error:', error);
-            this.showMessage('Microphone access denied or not available', 'danger');
+            let msg = 'Microphone unavailable';
+            if (error && error.name === 'NotAllowedError') {
+                msg =
+                    'Microphone blocked — tap the lock/info icon in the address bar and allow the microphone.';
+            } else if (error && error.name === 'NotFoundError') {
+                msg = 'No microphone found on this device.';
+            } else if (error && error.message) {
+                msg = error.message;
+            }
+            this.showMessage(msg, 'danger');
         }
     }
 
