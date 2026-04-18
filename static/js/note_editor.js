@@ -1,5 +1,37 @@
 // static/js/note_editor.js
 
+/**
+ * Pick a MediaRecorder mime type that works on this device (iOS/Safari use MP4/AAC; Chrome often WebM).
+ */
+function pickRecorderMimeType() {
+    if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) {
+        return '';
+    }
+    const candidates = [
+        'audio/mp4',
+        'audio/mp4; codecs=mp4a.40.2',
+        'audio/webm; codecs=opus',
+        'audio/webm',
+    ];
+    for (const t of candidates) {
+        if (MediaRecorder.isTypeSupported(t)) {
+            return t;
+        }
+    }
+    return '';
+}
+
+function buildRecorderOptions(mimeType) {
+    const opts = {};
+    if (mimeType) {
+        opts.mimeType = mimeType;
+    }
+    if (mimeType.includes('webm')) {
+        opts.audioBitsPerSecond = 64000;
+    }
+    return opts;
+}
+
 class NoteEditor {
     constructor(config) {
         this.config = config;
@@ -16,6 +48,8 @@ class NoteEditor {
         this.audioContext = null;
         this.audioSource = null;
         this.visualizerBars = [];
+        /** @type {string} mime type actually used by MediaRecorder (for Blob / upload) */
+        this.recordedMimeType = 'audio/webm';
 
         // File upload state
         this.files = {
@@ -100,21 +134,29 @@ class NoteEditor {
 
     async startRecording() {
         try {
-            // Request microphone access
+            // iOS: AudioContext starts suspended until a user gesture — resume on Record tap
+            if (this.audioContext && this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
+            }
+
+            // Avoid sampleRate / strict constraints — mobile often throws OverconstrainedError
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true,
-                    sampleRate: 44100
-                }
+                },
             });
 
-            // Initialize MediaRecorder
-            this.mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm',
-                audioBitsPerSecond: 64000 // Lower bitrate for smaller files
-            });
+            const mimeType = pickRecorderMimeType();
+            const recorderOpts = buildRecorderOptions(mimeType);
+
+            // Initialize MediaRecorder (Safari/iOS needs MP4, not WebM)
+            this.mediaRecorder = new MediaRecorder(stream, recorderOpts);
+            this.recordedMimeType =
+                this.mediaRecorder.mimeType ||
+                mimeType ||
+                'audio/webm';
 
             // Set up data handler
             this.audioChunks = [];
@@ -214,8 +256,9 @@ class NoteEditor {
         this.updateProgress(30, 'Processing audio...');
 
         try {
-            // Combine chunks
-            const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+            // Combine chunks (type must match what the browser recorded)
+            const blobType = this.recordedMimeType || 'audio/webm';
+            const audioBlob = new Blob(this.audioChunks, { type: blobType });
 
             // Check if compression is enabled
             const compress = this.compressCheckbox ? this.compressCheckbox.checked : true;

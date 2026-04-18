@@ -182,6 +182,7 @@ class FileUploadService:
         """Get file extension from mime type"""
         mime_to_ext = {
             'audio/webm': 'webm',
+            'audio/mp4': 'm4a',
             'audio/mp3': 'mp3',
             'audio/mpeg': 'mp3',
             'audio/wav': 'wav',
