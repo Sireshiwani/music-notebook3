@@ -53,6 +53,14 @@ function createBestMediaRecorderForMain(stream) {
     ];
     const order = isAppleTouchDeviceForMain() ? appleFirst : chromeFirst;
 
+    if (!isAppleTouchDeviceForMain()) {
+        try {
+            return new MediaRecorder(stream);
+        } catch (_) {
+            /* fall through */
+        }
+    }
+
     if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
         for (const mime of order) {
             if (!MediaRecorder.isTypeSupported(mime)) continue;
@@ -208,18 +216,7 @@ function initAudioRecorder() {
     let isRecording = false;
     let recordedMimeType = 'audio/webm';
 
-    let lastStartAt = 0;
-    function tryStartRecording() {
-        const now = Date.now();
-        if (now - lastStartAt < 600) return;
-        lastStartAt = now;
-        startRecording();
-    }
-    startBtn.addEventListener('pointerdown', (e) => {
-        if (e.button !== 0) return;
-        tryStartRecording();
-    });
-    startBtn.addEventListener('click', () => tryStartRecording());
+    startBtn.addEventListener('click', startRecording);
     stopBtn.addEventListener('click', stopRecording);
 
     async function startRecording() {
@@ -235,9 +232,25 @@ function initAudioRecorder() {
             return;
         }
 
+        if (!window.isSecureContext) {
+            updateRecordingStatus('Recording requires HTTPS.', 'error');
+            return;
+        }
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            updateRecordingStatus('Microphone API not available.', 'error');
+            return;
+        }
+
         let stream = null;
         try {
             stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            if (!stream.getAudioTracks().length) {
+                stream.getTracks().forEach((t) => t.stop());
+                updateRecordingStatus('No audio track from microphone.', 'error');
+                return;
+            }
 
             mediaRecorder = createBestMediaRecorderForMain(stream);
             recordedMimeType =
@@ -282,25 +295,7 @@ function initAudioRecorder() {
                 stopBtn.disabled = true;
             };
 
-            mediaRecorder.start(250);
-
-            await new Promise((r) => setTimeout(r, 50));
-            if (mediaRecorder.state !== 'recording') {
-                mediaRecorder.onstop = null;
-                mediaRecorder.ondataavailable = null;
-                try {
-                    mediaRecorder.stop();
-                } catch (_) {
-                    /* ignore */
-                }
-                mediaRecorder = null;
-                stream.getTracks().forEach((t) => t.stop());
-                updateRecordingStatus(
-                    'Recording did not start — try updating Chrome / Android System WebView.',
-                    'error'
-                );
-                return;
-            }
+            mediaRecorder.start();
 
             isRecording = true;
 
@@ -327,6 +322,16 @@ function initAudioRecorder() {
 
     function stopRecording() {
         if (mediaRecorder && isRecording) {
+            try {
+                if (
+                    mediaRecorder.state === 'recording' &&
+                    typeof mediaRecorder.requestData === 'function'
+                ) {
+                    mediaRecorder.requestData();
+                }
+            } catch (_) {
+                /* ignore */
+            }
             mediaRecorder.stop();
             isRecording = false;
         }

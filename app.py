@@ -59,6 +59,12 @@ def create_app():
 
     app.file_upload_service = FileUploadService(app)
 
+    @app.after_request
+    def allow_microphone_permissions_policy(response):
+        # Ensure embedded browsers / strict defaults do not block getUserMedia (nginx can still override).
+        response.headers.setdefault('Permissions-Policy', 'microphone=(self)')
+        return response
+
     return app
 
 

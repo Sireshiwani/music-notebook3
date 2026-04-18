@@ -59,6 +59,15 @@ function createBestMediaRecorder(stream) {
     ];
     const order = isAppleTouchDevice() ? appleFirst : chromeFirst;
 
+    // Chrome/Firefox/Android: default codec (no mime) is usually the most reliable
+    if (!isAppleTouchDevice()) {
+        try {
+            return new MediaRecorder(stream);
+        } catch (_) {
+            /* fall through to explicit mime list */
+        }
+    }
+
     if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
         for (const mime of order) {
             if (!MediaRecorder.isTypeSupported(mime)) continue;
@@ -134,19 +143,8 @@ class NoteEditor {
         // Create visualizer bars
         this.createVisualizerBars();
 
-        // Debounced pointerdown + click — Android fires both; Space/keyboard uses click only.
-        let lastStartAt = 0;
-        const tryStart = () => {
-            const now = Date.now();
-            if (now - lastStartAt < 600) return;
-            lastStartAt = now;
-            this.startRecording();
-        };
-        this.startBtn.addEventListener('pointerdown', (e) => {
-            if (e.button !== 0) return;
-            tryStart();
-        });
-        this.startBtn.addEventListener('click', () => tryStart());
+        // Single click handler — avoids duplicate pointerdown+click races; works with keyboard (Space).
+        this.startBtn.addEventListener('click', () => this.startRecording());
 
         this.stopBtn.addEventListener('click', () => this.stopRecording());
         this.pauseBtn.addEventListener('click', () => this.pauseRecording());
@@ -198,11 +196,31 @@ class NoteEditor {
             return;
         }
 
+        if (!window.isSecureContext) {
+            this.showMessage(
+                'Recording requires HTTPS. Open the site with https:// (not http://).',
+                'danger'
+            );
+            return;
+        }
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            this.showMessage('Microphone API not available in this browser or context.', 'danger');
+            return;
+        }
+
         let stream = null;
         try {
             // iOS Safari: user activation for the mic must not be preceded by another await
             // (e.g. AudioContext.resume). Request the mic first, then resume the visualizer context.
             stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            const audioTracks = stream.getAudioTracks();
+            if (!audioTracks.length) {
+                stream.getTracks().forEach((t) => t.stop());
+                this.showMessage('Microphone opened but no audio track was provided.', 'danger');
+                return;
+            }
 
             try {
                 if (this.audioContext && this.audioContext.state === 'suspended') {
@@ -250,27 +268,8 @@ class NoteEditor {
                 console.warn('Audio visualizer skipped:', visErr);
             }
 
-            // Frequent slices — some mobile browsers omit chunks until stop if the slice is too large
-            this.mediaRecorder.start(250);
-
-            // Android Chrome: MP4 mime can leave recorder stuck "inactive"; verify we entered "recording"
-            await new Promise((r) => setTimeout(r, 50));
-            if (this.mediaRecorder.state !== 'recording') {
-                this.mediaRecorder.onstop = null;
-                this.mediaRecorder.ondataavailable = null;
-                try {
-                    this.mediaRecorder.stop();
-                } catch (_) {
-                    /* ignore */
-                }
-                this.mediaRecorder = null;
-                stream.getTracks().forEach((t) => t.stop());
-                this.showMessage(
-                    'Recorder did not start on this browser. Try Chrome, or update Android WebView.',
-                    'danger'
-                );
-                return;
-            }
+            // No timeslice — delivers data when you stop(); works best on Firefox Android / WebView
+            this.mediaRecorder.start();
 
             this.isRecording = true;
             this.isPaused = false;
@@ -298,6 +297,16 @@ class NoteEditor {
 
     stopRecording() {
         if (this.mediaRecorder && this.isRecording) {
+            try {
+                if (
+                    this.mediaRecorder.state === 'recording' &&
+                    typeof this.mediaRecorder.requestData === 'function'
+                ) {
+                    this.mediaRecorder.requestData();
+                }
+            } catch (_) {
+                /* ignore */
+            }
             this.mediaRecorder.stop();
             this.isRecording = false;
             this.updateRecordingUI(false);
@@ -507,7 +516,9 @@ class NoteEditor {
 
     updateRecordingUI(isRecording) {
         // Show/hide elements
-        this.visualizer.classList.toggle('d-none', !isRecording);
+        if (this.visualizer) {
+            this.visualizer.classList.toggle('d-none', !isRecording);
+        }
 
         // Enable/disable buttons
         this.startBtn.disabled = isRecording;
