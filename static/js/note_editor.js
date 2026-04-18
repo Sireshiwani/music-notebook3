@@ -33,16 +33,32 @@ function buildRecorderOptions(mimeType) {
     return opts;
 }
 
+/** Safari / iOS needs MP4 first; Chrome / Android records reliably with WebM/Opus (MP4 can report supported but stay inactive). */
+function isAppleTouchDevice() {
+    const ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/i.test(ua)) return true;
+    if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+    return false;
+}
+
 /**
  * Try supported mime types until MediaRecorder accepts one (Safari/iOS differs by version).
  */
 function createBestMediaRecorder(stream) {
-    const order = [
+    const appleFirst = [
         'audio/mp4',
         'audio/mp4; codecs=mp4a.40.2',
         'audio/webm; codecs=opus',
         'audio/webm',
     ];
+    const chromeFirst = [
+        'audio/webm; codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/mp4; codecs=mp4a.40.2',
+    ];
+    const order = isAppleTouchDevice() ? appleFirst : chromeFirst;
+
     if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
         for (const mime of order) {
             if (!MediaRecorder.isTypeSupported(mime)) continue;
@@ -118,8 +134,20 @@ class NoteEditor {
         // Create visualizer bars
         this.createVisualizerBars();
 
-        // Add event listeners
-        this.startBtn.addEventListener('click', () => this.startRecording());
+        // Debounced pointerdown + click — Android fires both; Space/keyboard uses click only.
+        let lastStartAt = 0;
+        const tryStart = () => {
+            const now = Date.now();
+            if (now - lastStartAt < 600) return;
+            lastStartAt = now;
+            this.startRecording();
+        };
+        this.startBtn.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            tryStart();
+        });
+        this.startBtn.addEventListener('click', () => tryStart());
+
         this.stopBtn.addEventListener('click', () => this.stopRecording());
         this.pauseBtn.addEventListener('click', () => this.pauseRecording());
         this.resumeBtn.addEventListener('click', () => this.resumeRecording());
@@ -224,6 +252,25 @@ class NoteEditor {
 
             // Frequent slices — some mobile browsers omit chunks until stop if the slice is too large
             this.mediaRecorder.start(250);
+
+            // Android Chrome: MP4 mime can leave recorder stuck "inactive"; verify we entered "recording"
+            await new Promise((r) => setTimeout(r, 50));
+            if (this.mediaRecorder.state !== 'recording') {
+                this.mediaRecorder.onstop = null;
+                this.mediaRecorder.ondataavailable = null;
+                try {
+                    this.mediaRecorder.stop();
+                } catch (_) {
+                    /* ignore */
+                }
+                this.mediaRecorder = null;
+                stream.getTracks().forEach((t) => t.stop());
+                this.showMessage(
+                    'Recorder did not start on this browser. Try Chrome, or update Android WebView.',
+                    'danger'
+                );
+                return;
+            }
 
             this.isRecording = true;
             this.isPaused = false;

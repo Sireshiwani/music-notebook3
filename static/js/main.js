@@ -31,13 +31,28 @@ function buildRecorderOptionsForMain(mimeType) {
     return opts;
 }
 
+function isAppleTouchDeviceForMain() {
+    const ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/i.test(ua)) return true;
+    if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+    return false;
+}
+
 function createBestMediaRecorderForMain(stream) {
-    const order = [
+    const appleFirst = [
         'audio/mp4',
         'audio/mp4; codecs=mp4a.40.2',
         'audio/webm; codecs=opus',
         'audio/webm',
     ];
+    const chromeFirst = [
+        'audio/webm; codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/mp4; codecs=mp4a.40.2',
+    ];
+    const order = isAppleTouchDeviceForMain() ? appleFirst : chromeFirst;
+
     if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
         for (const mime of order) {
             if (!MediaRecorder.isTypeSupported(mime)) continue;
@@ -193,7 +208,18 @@ function initAudioRecorder() {
     let isRecording = false;
     let recordedMimeType = 'audio/webm';
 
-    startBtn.addEventListener('click', startRecording);
+    let lastStartAt = 0;
+    function tryStartRecording() {
+        const now = Date.now();
+        if (now - lastStartAt < 600) return;
+        lastStartAt = now;
+        startRecording();
+    }
+    startBtn.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        tryStartRecording();
+    });
+    startBtn.addEventListener('click', () => tryStartRecording());
     stopBtn.addEventListener('click', stopRecording);
 
     async function startRecording() {
@@ -257,6 +283,25 @@ function initAudioRecorder() {
             };
 
             mediaRecorder.start(250);
+
+            await new Promise((r) => setTimeout(r, 50));
+            if (mediaRecorder.state !== 'recording') {
+                mediaRecorder.onstop = null;
+                mediaRecorder.ondataavailable = null;
+                try {
+                    mediaRecorder.stop();
+                } catch (_) {
+                    /* ignore */
+                }
+                mediaRecorder = null;
+                stream.getTracks().forEach((t) => t.stop());
+                updateRecordingStatus(
+                    'Recording did not start — try updating Chrome / Android System WebView.',
+                    'error'
+                );
+                return;
+            }
+
             isRecording = true;
 
             updateRecordingStatus('Recording...', 'recording');
