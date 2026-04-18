@@ -170,3 +170,9 @@ dmypy.json
 cython_debug/
 
 .notebook.db
+
+# Server deploy helper (written by scripts/deploy.sh — do not commit)
+.deploy_current_commit
+
+# User-uploaded files (audio, docs, images); keep out of git
+static/uploads/
