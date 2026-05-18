@@ -1,0 +1,124 @@
+{# Renders ONE goal set with its Goal 1–5 tabs and (for the editor) save form.
+
+   Required context: gs (StudentGoalSet), pct (int 0–100), student.
+   Optional: is_current (bool) — adds a "Current" badge.
+#}
+{% set is_current = is_current|default(false) %}
+{% set is_goal_editor = current_user.role == 'teacher' and current_user.teacher_profile and gs.teacher_id == current_user.teacher_profile.id %}
+
+<div class="goal-set-block mb-4 pb-3 border-bottom">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+        <div>
+            {% if gs.calendar_period_id and gs.calendar_period %}
+                <span class="badge bg-secondary">Private</span>
+                <strong>{{ gs.calendar_period.name }}</strong>
+                <span class="text-muted small d-block d-sm-inline">({{ gs.calendar_period.start_date }} – {{ gs.calendar_period.end_date }})</span>
+            {% elif gs.school_term_id and gs.school_term %}
+                <span class="badge bg-info text-dark">School</span>
+                <strong>{{ gs.school_term.school.name }} — {{ gs.school_term.name }}</strong>
+                <span class="text-muted small d-block d-sm-inline">({{ gs.school_term.start_date }} – {{ gs.school_term.end_date }})</span>
+            {% else %}
+                <span class="text-muted">Goal set #{{ gs.id }}</span>
+            {% endif %}
+            {% if is_current %}
+                <span class="badge bg-success ms-1"><i class="bi bi-broadcast"></i> Current</span>
+            {% endif %}
+        </div>
+        <div class="text-end">
+            <span class="badge bg-light text-dark border">{{ pct }}%</span>
+            {% if is_goal_editor %}
+                {% if gs.calendar_period_id %}
+                <a class="btn btn-sm btn-outline-primary"
+                   href="{{ url_for('notes.add_note', student_id=student.id, calendar_period_id=gs.calendar_period_id) }}">
+                    Add note in this period
+                </a>
+                {% elif gs.school_term_id %}
+                <a class="btn btn-sm btn-outline-primary"
+                   href="{{ url_for('notes.add_note', student_id=student.id, school_term_id=gs.school_term_id) }}">
+                    Add note in this period
+                </a>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="progress mb-3" style="height:8px;">
+        <div class="progress-bar" style="width: {{ pct }}%"></div>
+    </div>
+
+    {% set slots = gs.five_slots() %}
+    <div class="goal-five-tabs mb-2">
+        {% if is_goal_editor %}
+        <p class="small text-muted mb-2">Up to five goals for this period. Use the tabs (Goal 1–5), enter text, tick completed, then <strong>Save goals</strong>.</p>
+        <form method="post" action="{{ url_for('goals.goal_set_save_five', goal_set_id=gs.id) }}" id="goal-five-form-{{ gs.id }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        {% else %}
+        <p class="small text-muted mb-2">Up to five goals for this period (Goal 1–5).</p>
+        <div>
+        {% endif %}
+
+            <ul class="nav nav-tabs nav-justified flex-nowrap small" role="tablist">
+                {% for n in [1,2,3,4,5] %}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link py-2 {% if n == 1 %}active{% endif %}" id="tab-gs{{ gs.id }}-g{{ n }}"
+                            data-bs-toggle="tab" data-bs-target="#pane-gs{{ gs.id }}-g{{ n }}"
+                            type="button" role="tab" aria-controls="pane-gs{{ gs.id }}-g{{ n }}"
+                            {% if n == 1 %}aria-selected="true"{% else %}aria-selected="false"{% endif %}>
+                        Goal {{ n }}
+                    </button>
+                </li>
+                {% endfor %}
+            </ul>
+
+            <div class="tab-content border border-top-0 rounded-bottom bg-white p-3">
+                {% for n in [1,2,3,4,5] %}
+                {% set idx = n - 1 %}
+                {% set item = slots[idx] %}
+                <div class="tab-pane fade {% if n == 1 %}show active{% endif %}" id="pane-gs{{ gs.id }}-g{{ n }}" role="tabpanel"
+                     aria-labelledby="tab-gs{{ gs.id }}-g{{ n }}">
+
+                    {% if is_goal_editor %}
+                        <label class="form-label fw-semibold">Goal {{ n }}</label>
+                        <input type="text" class="form-control mb-2" name="text_{{ n }}" maxlength="500"
+                               value="{{ item.text if item else '' }}"
+                               placeholder="Describe this goal (leave empty to keep this slot unused)">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="done_{{ n }}" id="done-gs{{ gs.id }}-{{ n }}"
+                                   {% if item and item.is_completed %}checked{% endif %}>
+                            <label class="form-check-label" for="done-gs{{ gs.id }}-{{ n }}">Completed</label>
+                        </div>
+                    {% else %}
+                        {% if item and item.text %}
+                            <p class="mb-2">{{ item.text }}</p>
+                            <p class="small mb-0 {% if item.is_completed %}text-success{% else %}text-muted{% endif %}">
+                                {% if item.is_completed %}<i class="bi bi-check-circle-fill"></i> Completed{% else %}<i class="bi bi-circle"></i> In progress{% endif %}
+                            </p>
+                        {% else %}
+                            <p class="text-muted small mb-0"><em>No goal set in this slot.</em></p>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if is_goal_editor %}
+            <div class="mt-2">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="bi bi-save"></i> Save goals
+                </button>
+            </div>
+            {% endif %}
+
+        {% if is_goal_editor %}
+        </form>
+        {% else %}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="mt-2">
+        <a href="{{ url_for('goals.goal_audit_log', student_id=student.id, goal_set_id=gs.id) }}" class="small">
+            <i class="bi bi-clock-history"></i> Audit history
+        </a>
+    </div>
+</div>

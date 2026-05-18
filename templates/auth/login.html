@@ -39,6 +39,11 @@
                         {{ form.remember(class="form-check-input") }}
                         <label class="form-check-label" for="remember">Remember me</label>
                     </div>
+                    <div class="mb-3 text-end">
+                        <a href="{{ url_for('auth.forgot_password') }}" class="small">
+                            Forgot password?
+                        </a>
+                    </div>
 
                     <div class="d-grid gap-2">
                         <button type="submit" class="btn btn-primary">

@@ -2,381 +2,393 @@
 
 {% block title %}{{ student.user.full_name }}'s Notes - Shajara{% endblock %}
 
-{% block content %}
-<div class="container-fluid">
-    <!-- Student Header -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="card-title mb-1">
-                        <i class="bi bi-person-circle text-primary"></i> {{ student.user.full_name }}
-                    </h2>
-                    <div class="text-muted">
-                        <span class="me-3">
-                            <i class="bi bi-at"></i> @{{ student.user.username }}
-                        </span>
-                        <span class="me-3">
-                            <i class="bi bi-mortarboard"></i> {{ student.grade_level or 'No grade level specified' }}
-                        </span>
-                        <span>
-                            <i class="bi bi-telephone"></i> {{ student.user.phone }}
-                        </span>
-                    </div>
-                </div>
+{% block extra_css %}
+<style>
+    .student-strip {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        padding: 0.85rem 1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        background: #fff;
+        margin-bottom: 1rem;
+    }
+    .student-strip .avatar {
+        width: 44px; height: 44px; flex-shrink: 0;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #4f46e5, #3b82f6);
+        color: #fff; font-weight: 700;
+        display: inline-flex; align-items: center; justify-content: center;
+    }
+    .student-strip .name { font-weight: 700; line-height: 1.1; }
+    .student-strip .pills { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.25rem; }
+    .student-strip .pill {
+        font-size: 0.72rem; font-weight: 600;
+        padding: 0.18rem 0.55rem; border-radius: 999px;
+        background: #f1f5f9; color: #475569;
+    }
+    .student-strip .pill.success { background: #dcfce7; color: #166534; }
+    .student-strip .pill.warning { background: #fef3c7; color: #92400e; }
 
-                {% if current_user.role == 'teacher' %}
-                <div class="btn-group">
-                    <a href="{{ url_for('notes.add_note', student_id=student.id) }}"
-                       class="btn btn-primary">
-                        <i class="bi bi-plus-circle"></i> Add New Note
-                    </a>
-                    <button type="button" class="btn btn-primary dropdown-toggle dropdown-toggle-split"
-                            data-bs-toggle="dropdown">
-                        <span class="visually-hidden">Toggle Dropdown</span>
-                    </button>
-                    <ul class="dropdown-menu">
-                        <li>
-                            <a class="dropdown-item" href="#">
-                                <i class="bi bi-envelope"></i> Email Student
-                            </a>
-                        </li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <a class="dropdown-item text-danger" href="#">
-                                <i class="bi bi-person-dash"></i> Remove from Class
-                            </a>
-                        </li>
-                    </ul>
+    .details-toggle { white-space: nowrap; }
+
+    .notes-card { border-radius: 18px; border: 1px solid #e2e8f0; }
+    .notes-card .notes-header {
+        display: flex; flex-wrap: wrap; gap: 0.6rem;
+        align-items: center; justify-content: space-between;
+        padding: 1rem 1.1rem; border-bottom: 1px solid #e2e8f0;
+    }
+    .notes-search { position: relative; flex: 1 1 220px; }
+    .notes-search .form-control { padding-left: 2.4rem; border-radius: 999px; }
+    .notes-search .search-icon {
+        position: absolute; top: 50%; left: 0.95rem;
+        transform: translateY(-50%); color: #94a3b8; pointer-events: none;
+    }
+
+    .note-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 1rem 1.1rem;
+        margin: 0.7rem 1.1rem;
+        background: #fff;
+        transition: border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+    .note-card:hover { border-color: #c7d2fe; box-shadow: 0 6px 18px rgba(79,70,229,0.07); }
+    .note-card .note-title { font-weight: 700; margin-bottom: 0.15rem; }
+    .note-card .note-meta { color: #64748b; font-size: 0.8rem; }
+    .note-card .note-preview { color: #334155; margin: 0.6rem 0 0.7rem 0; }
+    .note-card .note-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .note-card .badges { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
+
+    .goals-card { border-radius: 18px; border: 1px solid #e2e8f0; }
+    .goals-card .goals-header {
+        padding: 1rem 1.1rem;
+        border-bottom: 1px solid #e2e8f0;
+        background: linear-gradient(135deg, rgba(79,70,229,0.06), rgba(59,130,246,0.04));
+        border-radius: 18px 18px 0 0;
+    }
+    .goals-card .goals-body { padding: 1rem 1.1rem; }
+    .goals-card .goal-set-block:last-child {
+        border-bottom: 0 !important;
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
+    }
+
+    .other-periods { background: #f8fafc; border-top: 1px solid #e2e8f0;
+        border-radius: 0 0 18px 18px; padding: 1rem 1.1rem; }
+
+    /* Sticky on desktop only */
+    @media (min-width: 992px) {
+        .goals-sticky { position: sticky; top: 1rem; }
+    }
+
+    /* Floating Action Button — mobile only */
+    .add-note-fab {
+        position: fixed;
+        bottom: 1.25rem; right: 1.25rem;
+        z-index: 1030;
+        width: 60px; height: 60px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #4f46e5, #3b82f6);
+        color: #fff; border: none;
+        box-shadow: 0 12px 24px rgba(79,70,229,0.35);
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 1.7rem;
+    }
+    .add-note-fab:hover { color: #fff; }
+
+    .more-card { border-radius: 18px; border: 1px solid #e2e8f0; }
+
+    .empty-state { text-align: center; padding: 2.5rem 1rem; color: #64748b; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set signed_count = namespace(value=0) %}
+{% set pending_count = namespace(value=0) %}
+{% for n in notes %}
+    {% if n.signature %}
+        {% set signed_count.value = signed_count.value + 1 %}
+    {% else %}
+        {% set pending_count.value = pending_count.value + 1 %}
+    {% endif %}
+{% endfor %}
+{% set initial = (student.user.full_name or student.user.username or '?')[:1]|upper %}
+
+{# === Compact student strip (with collapsible details) === #}
+<div class="student-strip">
+    <span class="avatar">{{ initial }}</span>
+    <div class="flex-grow-1" style="min-width: 0;">
+        <div class="name text-truncate">{{ student.user.full_name }}</div>
+        <div class="pills">
+            <span class="pill">{{ notes|length }} notes</span>
+            {% if signed_count.value %}<span class="pill success">{{ signed_count.value }} signed</span>{% endif %}
+            {% if pending_count.value %}<span class="pill warning">{{ pending_count.value }} pending</span>{% endif %}
+        </div>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary details-toggle"
+            data-bs-toggle="collapse" data-bs-target="#studentDetails"
+            aria-expanded="false" aria-controls="studentDetails">
+        <i class="bi bi-info-circle"></i>
+        <span class="d-none d-sm-inline ms-1">Details</span>
+    </button>
+</div>
+
+<div class="collapse mb-3" id="studentDetails">
+    <div class="card border-0 shadow-sm">
+        <div class="card-body small text-muted">
+            <div class="row g-2">
+                <div class="col-sm-4">
+                    <i class="bi bi-at"></i> @{{ student.user.username }}
                 </div>
-                {% endif %}
+                <div class="col-sm-4">
+                    <i class="bi bi-mortarboard"></i>
+                    {{ student.grade_level or 'No grade level specified' }}
+                </div>
+                <div class="col-sm-4">
+                    <i class="bi bi-telephone"></i>
+                    {{ student.user.phone or '—' }}
+                </div>
             </div>
         </div>
     </div>
+</div>
 
-    <div class="row">
-        <!-- Left Sidebar - Quick Stats -->
-        <div class="col-md-3">
-            <!-- Statistics Card -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-graph-up"></i> Statistics</h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>Total Notes</span>
-                            <strong>{{ notes|length }}</strong>
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-primary" style="width: 100%"></div>
-                        </div>
+{# === Two-column layout: Notes (left), Goals (right). Stacks on mobile. === #}
+<div class="row g-3">
+    {# ---------- LESSON NOTES ---------- #}
+    <div class="col-lg-8 order-1">
+        <div class="notes-card bg-white shadow-sm">
+            <div class="notes-header">
+                <h4 class="mb-0">
+                    <i class="bi bi-journal-text text-primary"></i> Lesson Notes
+                    <span class="badge bg-light text-dark border ms-1">{{ notes|length }}</span>
+                </h4>
+                <div class="d-flex gap-2 align-items-center flex-grow-1 justify-content-end" style="min-width: 220px;">
+                    <div class="notes-search">
+                        <i class="bi bi-search search-icon"></i>
+                        <input type="text" id="noteSearch" class="form-control form-control-sm"
+                               placeholder="Search notes...">
                     </div>
-
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>Signed Notes</span>
-                            <strong class="text-success">
-                                {% set signed_count = namespace(count=0) %}
-                                {% for note in notes %}
-                                    {% if note.signature %}{% set signed_count.count = signed_count.count + 1 %}{% endif %}
-                                {% endfor %}
-                                {{ signed_count.count }}
-                            </strong>
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-success"
-                                 style="width: {% if notes|length > 0 %}{{ (signed_count.count / notes|length) * 100 }}{% else %}0{% endif %}%">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>Pending Signatures</span>
-                            <strong class="text-warning">
-                                {% set pending_count = namespace(count=0) %}
-                                {% for note in notes %}
-                                    {% if not note.signature %}{% set pending_count.count = pending_count.count + 1 %}{% endif %}
-                                {% endfor %}
-                                {{ pending_count.count }}
-                            </strong>
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-warning"
-                                 style="width: {% if notes|length > 0 %}{{ (pending_count.count / notes|length) * 100 }}{% else %}0{% endif %}%">
-                            </div>
-                        </div>
-                    </div>
+                    {% if current_user.role == 'teacher' %}
+                    <a href="{{ url_for('notes.add_note', student_id=student.id) }}"
+                       class="btn btn-primary btn-sm d-none d-sm-inline-flex align-items-center">
+                        <i class="bi bi-plus-circle me-1"></i> Add note
+                    </a>
+                    {% endif %}
                 </div>
             </div>
 
-            <!-- Quick Actions -->
-            {% if current_user.role == 'teacher' %}
-            <div class="card shadow-sm">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0"><i class="bi bi-lightning-charge"></i> Quick Actions</h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <a href="{{ url_for('notes.add_note', student_id=student.id) }}"
-                           class="btn btn-success">
-                            <i class="bi bi-plus-circle"></i> Add New Note
-                        </a>
-                        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#requestSignaturesModal">
-                            <i class="bi bi-envelope-check"></i> Request Signatures
-                        </button>
-                        <a href="#" class="btn btn-outline-secondary">
-                            <i class="bi bi-download"></i> Export Notes
-                        </a>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
-            {% include 'goals/_goal_panel.html' %}
-        </div>
-
-        <!-- Main Content - Notes List -->
-        <div class="col-md-9">
-            <!-- Notes Filter and Search -->
-            <div class="card shadow-sm mb-4">
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-8">
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                                <input type="text" id="noteSearch" class="form-control"
-                                       placeholder="Search in notes...">
-                                <button class="btn btn-outline-secondary" type="button" id="clearSearch">
-                                    Clear
-                                </button>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <select class="form-select" id="filterStatus">
-                                <option value="">All Notes</option>
-                                <option value="signed">Signed Only</option>
-                                <option value="pending">Pending Only</option>
-                                <option value="with_homework">With Homework</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Notes List -->
-            <div class="card shadow-sm">
-                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="bi bi-journal-text"></i> Lesson Notes
-                        <span class="badge bg-light text-dark ms-2">{{ notes|length }}</span>
-                    </h5>
-                    <div class="btn-group">
-                        <button class="btn btn-light btn-sm" id="listViewBtn" title="List View">
-                            <i class="bi bi-list"></i>
-                        </button>
-                        <button class="btn btn-outline-light btn-sm" id="gridViewBtn" title="Grid View">
-                            <i class="bi bi-grid"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="card-body p-0">
-                    {% if notes %}
-                    <div id="notesListView" class="list-group list-group-flush">
-                        {% for note in notes %}
-                        <div class="list-group-item note-item"
-                             data-signed="{% if note.signature %}true{% else %}false{% endif %}"
-                             data-homework="{% if note.homework %}true{% else %}false{% endif %}">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="flex-grow-1 me-3">
-                                    <div class="d-flex align-items-center mb-2">
-                                        <h5 class="mb-0 me-2">{{ note.title }}</h5>
-                                        <div class="d-flex gap-1">
-                                            {% if note.signature %}
-                                            <span class="badge bg-success">
-                                                <i class="bi bi-check-circle"></i> Signed
-                                            </span>
-                                            {% else %}
-                                            <span class="badge bg-warning text-dark">
-                                                <i class="bi bi-clock"></i> Pending
-                                            </span>
-                                            {% endif %}
-
-                                            {% if note.homework %}
-                                            <span class="badge bg-info">
-                                                <i class="bi bi-journal-check"></i> Homework
-                                            </span>
-                                            {% endif %}
-
-                                            {% if note.audio_filename %}
-                                            <span class="badge bg-secondary">
-                                                <i class="bi bi-mic"></i> Audio
-                                            </span>
-                                            {% endif %}
-
-                                            {% if note.pdf_filename %}
-                                            <span class="badge bg-danger">
-                                                <i class="bi bi-file-pdf"></i> PDF
-                                            </span>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-
-                                    <p class="text-muted mb-2">
-                                        <i class="bi bi-calendar"></i> {{ note.date.strftime('%B %d, %Y') }}
-                                        {% if current_user.role == 'teacher' %}
-                                        • <i class="bi bi-person-badge"></i> You
-                                        {% else %}
+            {% if notes %}
+                <div id="notesListView" class="py-2">
+                    {% for note in notes %}
+                    <div class="note-card note-item"
+                         data-signed="{% if note.signature %}true{% else %}false{% endif %}"
+                         data-homework="{% if note.homework %}true{% else %}false{% endif %}">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div class="flex-grow-1" style="min-width: 0;">
+                                <div class="note-title">{{ note.title }}</div>
+                                <div class="note-meta">
+                                    <i class="bi bi-calendar"></i> {{ note.date.strftime('%b %d, %Y') }}
+                                    {% if current_user.role != 'teacher' %}
                                         • <i class="bi bi-person-badge"></i> {{ note.teacher.user.full_name }}
-                                        {% endif %}
-                                    </p>
-
-                                    <div class="note-preview mb-3">
-                                        {{ note.content|truncate(200) }}
-                                    </div>
-
-                                    {% if note.homework %}
-                                    <div class="homework-preview">
-                                        <small class="text-muted"><strong>Homework:</strong></small>
-                                        <p class="mb-0 small">{{ note.homework|truncate(100) }}</p>
-                                    </div>
-                                    {% endif %}
-                                </div>
-
-                                <div class="btn-group-vertical">
-                                    <a href="{{ url_for('notes.view_note', note_id=note.id) }}"
-                                       class="btn btn-sm btn-outline-primary mb-1">
-                                        <i class="bi bi-eye"></i> View
-                                    </a>
-
-                                    {% if current_user.role == 'teacher' %}
-                                    <a href="{{ url_for('notes.edit_note', note_id=note.id) }}"
-                                       class="btn btn-sm btn-outline-secondary mb-1">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </a>
-                                    {% endif %}
-
-                                    {% if current_user.role == 'student' and not note.signature %}
-                                    <a href="{{ url_for('notes.sign_note', note_id=note.id) }}"
-                                       class="btn btn-sm btn-success mb-1">
-                                        <i class="bi bi-pen"></i> Sign
-                                    </a>
-                                    {% endif %}
-
-                                    {% if note.signature %}
-                                    <button class="btn btn-sm btn-outline-success mb-1 view-signature-btn"
-                                            data-note-id="{{ note.id }}">
-                                        <i class="bi bi-signature"></i> View Signature
-                                    </button>
                                     {% endif %}
                                 </div>
                             </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-
-                    <!-- Grid View (Hidden by default) -->
-                    <div id="notesGridView" class="row row-cols-1 row-cols-md-2 g-4 p-3" style="display: none;">
-                        {% for note in notes %}
-                        <div class="col">
-                            <div class="card h-100 note-item"
-                                 data-signed="{% if note.signature %}true{% else %}false{% endif %}"
-                                 data-homework="{% if note.homework %}true{% else %}false{% endif %}">
-                                <div class="card-header">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <h6 class="mb-0">{{ note.title|truncate(30) }}</h6>
-                                        <div>
-                                            {% if note.signature %}
-                                            <i class="bi bi-check-circle text-success" title="Signed"></i>
-                                            {% else %}
-                                            <i class="bi bi-clock text-warning" title="Pending"></i>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="card-body">
-                                    <p class="card-text small">{{ note.content|truncate(150) }}</p>
-
-                                    {% if note.homework %}
-                                    <div class="border-top pt-2 mt-2">
-                                        <small class="text-muted"><strong>Homework:</strong></small>
-                                        <p class="small mb-0">{{ note.homework|truncate(80) }}</p>
-                                    </div>
-                                    {% endif %}
-
-                                    <div class="mt-2">
-                                        <small class="text-muted">
-                                            {{ note.date.strftime('%b %d, %Y') }}
-                                        </small>
-                                    </div>
-                                </div>
-                                <div class="card-footer bg-transparent">
-                                    <div class="d-flex justify-content-between">
-                                        <a href="{{ url_for('notes.view_note', note_id=note.id) }}"
-                                           class="btn btn-sm btn-outline-primary">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-
-                                        {% if current_user.role == 'teacher' %}
-                                        <a href="{{ url_for('notes.edit_note', note_id=note.id) }}"
-                                           class="btn btn-sm btn-outline-secondary">
-                                            <i class="bi bi-pencil"></i>
-                                        </a>
-                                        {% endif %}
-
-                                        {% if current_user.role == 'student' and not note.signature %}
-                                        <a href="{{ url_for('notes.sign_note', note_id=note.id) }}"
-                                           class="btn btn-sm btn-success">
-                                            <i class="bi bi-pen"></i>
-                                        </a>
-                                        {% endif %}
-                                    </div>
-                                </div>
+                            <div>
+                                {% if note.signature %}
+                                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Signed</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> Pending</span>
+                                {% endif %}
                             </div>
                         </div>
-                        {% endfor %}
-                    </div>
 
-                    {% else %}
-                    <div class="text-center py-5">
-                        <i class="bi bi-journal-text display-1 text-muted mb-3"></i>
-                        <h4 class="text-muted">No Notes Yet</h4>
-                        <p class="text-muted">
-                            {% if current_user.role == 'teacher' %}
-                            Get started by adding your first lesson note for {{ student.user.full_name }}.
-                            {% else %}
-                            No lesson notes have been added yet.
-                            {% endif %}
-                        </p>
-                        {% if current_user.role == 'teacher' %}
-                        <a href="{{ url_for('notes.add_note', student_id=student.id) }}"
-                           class="btn btn-primary mt-3">
-                            <i class="bi bi-plus-circle"></i> Add First Note
-                        </a>
+                        <div class="note-preview">{{ note.content|truncate(180) }}</div>
+
+                        {% if note.homework %}
+                        <div class="border-top pt-2 small">
+                            <span class="text-muted"><strong>Homework:</strong></span>
+                            {{ note.homework|truncate(120) }}
+                        </div>
                         {% endif %}
+
+                        <div class="badges">
+                            {% if note.homework %}
+                                <span class="badge bg-info"><i class="bi bi-journal-check"></i> Homework</span>
+                            {% endif %}
+                            {% if note.audio_filename %}
+                                <span class="badge bg-secondary"><i class="bi bi-mic"></i> Audio</span>
+                            {% endif %}
+                            {% if note.pdf_filename %}
+                                <span class="badge bg-danger"><i class="bi bi-file-pdf"></i> PDF</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="note-actions mt-3">
+                            <a href="{{ url_for('notes.view_note', note_id=note.id) }}"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> View
+                            </a>
+                            {% if current_user.role == 'teacher' %}
+                            <a href="{{ url_for('notes.edit_note', note_id=note.id) }}"
+                               class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-pencil"></i> Edit
+                            </a>
+                            {% endif %}
+                            {% if current_user.role == 'student' and not note.signature %}
+                            <a href="{{ url_for('notes.sign_note', note_id=note.id) }}"
+                               class="btn btn-sm btn-success">
+                                <i class="bi bi-pen"></i> Sign
+                            </a>
+                            {% endif %}
+                            {% if note.signature %}
+                            <button class="btn btn-sm btn-outline-success view-signature-btn"
+                                    data-note-id="{{ note.id }}">
+                                <i class="bi bi-signature"></i> Signature
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="empty-state filter-empty d-none">
+                    <i class="bi bi-search display-6 mb-2 d-block"></i>
+                    No notes match your search.
+                </div>
+
+            {% else %}
+                <div class="empty-state">
+                    <i class="bi bi-journal-text display-1 text-muted mb-3 d-block"></i>
+                    <h5 class="text-muted">No notes yet</h5>
+                    <p class="text-muted mb-3">
+                        {% if current_user.role == 'teacher' %}
+                            Get started by adding your first lesson note for {{ student.user.full_name }}.
+                        {% else %}
+                            No lesson notes have been added yet.
+                        {% endif %}
+                    </p>
+                    {% if current_user.role == 'teacher' %}
+                    <a href="{{ url_for('notes.add_note', student_id=student.id) }}"
+                       class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Add first note
+                    </a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ---------- GOALS ---------- #}
+    <div class="col-lg-4 order-2">
+        <div class="goals-sticky">
+            <div class="goals-card bg-white shadow-sm">
+                <div class="goals-header">
+                    <h5 class="mb-1"><i class="bi bi-bullseye text-primary"></i> Goals</h5>
+                    <div class="small text-muted">
+                        {% if current_sets %}
+                            Showing the goal set{{ '' if current_sets|length == 1 else 's' }} active for today
+                            ({{ today.strftime('%b %d, %Y') }}).
+                        {% else %}
+                            No active period covers today ({{ today.strftime('%b %d, %Y') }}).
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="goals-body">
+                    {% if current_sets %}
+                        {% for gs, pct in current_sets %}
+                            {% set is_current = true %}
+                            {% include 'goals/_goal_set_card.html' %}
+                        {% endfor %}
+                    {% else %}
+                        {% if current_user.role == 'teacher' and current_user.teacher_profile %}
+                            <div class="alert alert-light border mb-3">
+                                <p class="small mb-1"><strong>No goals for today's period yet.</strong></p>
+                                <p class="small mb-0">
+                                    Create a calendar period that includes today, or use the
+                                    <em>Other terms / periods</em> picker below to open another goal set.
+                                    Manage periods under
+                                    <a href="{{ url_for('goals.calendar_periods') }}">Calendar periods</a>.
+                                </p>
+                            </div>
+                        {% else %}
+                            <p class="text-muted small mb-3">
+                                No goals have been set for this profile in the current period.
+                            </p>
+                        {% endif %}
+                    {% endif %}
+
+                    {# 2) Past / future goal sets fold into a disclosure #}
+                    {% if other_sets %}
+                    <div class="mt-3">
+                        <button class="btn btn-sm btn-outline-secondary w-100" type="button"
+                                data-bs-toggle="collapse" data-bs-target="#otherGoalSets">
+                            <i class="bi bi-clock-history"></i>
+                            Past / future goal sets ({{ other_sets|length }})
+                        </button>
+                        <div class="collapse mt-3" id="otherGoalSets">
+                            {% for gs, pct in other_sets %}
+                                {% set is_current = false %}
+                                {% include 'goals/_goal_set_card.html' %}
+                            {% endfor %}
+                        </div>
                     </div>
                     {% endif %}
                 </div>
 
-                {% if notes %}
-                <div class="card-footer">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <small class="text-muted">
-                                Showing {{ notes|length }} note{% if notes|length != 1 %}s{% endif %}
-                            </small>
+                {# 3) Manual period switcher (teacher only) — collapsed #}
+                {% if current_user.role == 'teacher' and current_user.teacher_profile %}
+                <div class="other-periods">
+                    <button class="btn btn-sm btn-link p-0 fw-semibold" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#periodSwitcher">
+                        <i class="bi bi-sliders"></i> Other terms / periods
+                    </button>
+                    <div class="collapse mt-2" id="periodSwitcher">
+                        <p class="small text-muted mb-2">
+                            Today's period is loaded automatically. Use these buttons to open a different one.
+                        </p>
+
+                        {% if calendar_periods %}
+                        <div class="mb-2">
+                            <span class="badge bg-secondary me-1">Private</span>
+                            <span class="small text-muted">Calendar periods</span>
                         </div>
-                        <div class="btn-group">
-                            <button class="btn btn-sm btn-outline-secondary" disabled>
-                                <i class="bi bi-chevron-left"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-secondary" disabled>1</button>
-                            <button class="btn btn-sm btn-outline-secondary" disabled>
-                                <i class="bi bi-chevron-right"></i>
-                            </button>
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            {% for p in calendar_periods %}
+                            <a href="{{ url_for('notes.student_notes', student_id=student.id, calendar_period_id=p.id) }}"
+                               class="btn btn-outline-primary btn-sm">
+                                {{ p.name }}
+                                <span class="text-muted small">({{ p.start_date }} – {{ p.end_date }})</span>
+                            </a>
+                            {% endfor %}
                         </div>
+                        {% else %}
+                        <p class="text-warning small mb-3">
+                            <i class="bi bi-exclamation-triangle"></i> No calendar periods yet —
+                            <a href="{{ url_for('goals.calendar_periods') }}">create one</a>.
+                        </p>
+                        {% endif %}
+
+                        {% if school_options %}
+                        <div class="mb-2">
+                            <span class="badge bg-info text-dark me-1">School</span>
+                            <span class="small text-muted">Terms</span>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            {% for block in school_options %}
+                                {% for t in block.terms %}
+                                <a href="{{ url_for('notes.student_notes', student_id=student.id, school_term_id=t.id) }}"
+                                   class="btn btn-outline-info btn-sm text-dark">
+                                    {{ block.school.name }} — {{ t.name }}
+                                    <span class="text-muted small">({{ t.start_date }})</span>
+                                </a>
+                                {% endfor %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
@@ -384,6 +396,66 @@
         </div>
     </div>
 </div>
+
+{# ---------- More (stats + actions) ---------- #}
+<div class="more-card bg-white shadow-sm mt-4">
+    <button class="btn w-100 d-flex justify-content-between align-items-center text-start"
+            type="button" data-bs-toggle="collapse" data-bs-target="#moreSection">
+        <span class="fw-semibold"><i class="bi bi-three-dots"></i> More</span>
+        <i class="bi bi-chevron-down"></i>
+    </button>
+    <div class="collapse" id="moreSection">
+        <div class="border-top p-3">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <h6 class="text-muted small text-uppercase">Statistics</h6>
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between mb-1"><span>Total notes</span><strong>{{ notes|length }}</strong></div>
+                        <div class="progress" style="height: 6px;"><div class="progress-bar bg-primary" style="width: 100%"></div></div>
+                    </div>
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between mb-1"><span>Signed notes</span><strong class="text-success">{{ signed_count.value }}</strong></div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-success" style="width: {% if notes|length > 0 %}{{ (signed_count.value / notes|length) * 100 }}{% else %}0{% endif %}%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="d-flex justify-content-between mb-1"><span>Pending signatures</span><strong class="text-warning">{{ pending_count.value }}</strong></div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-warning" style="width: {% if notes|length > 0 %}{{ (pending_count.value / notes|length) * 100 }}{% else %}0{% endif %}%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if current_user.role == 'teacher' %}
+                <div class="col-md-6">
+                    <h6 class="text-muted small text-uppercase">Quick actions</h6>
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('notes.add_note', student_id=student.id) }}" class="btn btn-success btn-sm">
+                            <i class="bi bi-plus-circle"></i> Add new note
+                        </a>
+                        <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#requestSignaturesModal">
+                            <i class="bi bi-envelope-check"></i> Request signatures
+                        </button>
+                        <a href="#" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-download"></i> Export notes
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ---------- Mobile FAB ---------- #}
+{% if current_user.role == 'teacher' %}
+<a href="{{ url_for('notes.add_note', student_id=student.id) }}"
+   class="add-note-fab d-inline-flex d-sm-none"
+   aria-label="Add note">
+    <i class="bi bi-plus-lg"></i>
+</a>
+{% endif %}
 
 <!-- Request Signatures Modal -->
 <div class="modal fade" id="requestSignaturesModal" tabindex="-1" aria-hidden="true">
@@ -431,124 +503,58 @@
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // View switching
-    const listViewBtn = document.getElementById('listViewBtn');
-    const gridViewBtn = document.getElementById('gridViewBtn');
-    const listView = document.getElementById('notesListView');
-    const gridView = document.getElementById('notesGridView');
-
-    listViewBtn.addEventListener('click', function() {
-        listView.style.display = 'block';
-        gridView.style.display = 'none';
-        listViewBtn.classList.remove('btn-outline-light');
-        listViewBtn.classList.add('btn-light');
-        gridViewBtn.classList.remove('btn-light');
-        gridViewBtn.classList.add('btn-outline-light');
-    });
-
-    gridViewBtn.addEventListener('click', function() {
-        listView.style.display = 'none';
-        gridView.style.display = 'flex';
-        gridViewBtn.classList.remove('btn-outline-light');
-        gridViewBtn.classList.add('btn-light');
-        listViewBtn.classList.remove('btn-light');
-        listViewBtn.classList.add('btn-outline-light');
-    });
-
-    // Note search functionality
+document.addEventListener('DOMContentLoaded', function () {
     const searchInput = document.getElementById('noteSearch');
-    const clearSearchBtn = document.getElementById('clearSearch');
+    const emptyState  = document.querySelector('.filter-empty');
+    const noteItems   = document.querySelectorAll('.note-item');
+
+    function applySearch() {
+        if (!searchInput) return;
+        const q = searchInput.value.trim().toLowerCase();
+        let visible = 0;
+        noteItems.forEach((item) => {
+            const text = item.textContent.toLowerCase();
+            const match = !q || text.includes(q);
+            item.classList.toggle('d-none', !match);
+            if (match) visible += 1;
+        });
+        if (emptyState) {
+            emptyState.classList.toggle('d-none', visible !== 0 || !q);
+        }
+    }
 
     if (searchInput) {
-        searchInput.addEventListener('input', debounce(function() {
-            const searchTerm = searchInput.value.toLowerCase();
-            filterNotes();
-        }, 300));
-    }
-
-    if (clearSearchBtn) {
-        clearSearchBtn.addEventListener('click', function() {
-            searchInput.value = '';
-            filterNotes();
+        let t = null;
+        searchInput.addEventListener('input', function () {
+            clearTimeout(t);
+            t = setTimeout(applySearch, 200);
         });
     }
 
-    // Filter by status
-    const filterStatus = document.getElementById('filterStatus');
-    if (filterStatus) {
-        filterStatus.addEventListener('change', filterNotes);
-    }
-
-    // Filter notes function
-    function filterNotes() {
-        const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
-        const statusFilter = filterStatus ? filterStatus.value : '';
-
-        const noteItems = document.querySelectorAll('.note-item');
-
-        noteItems.forEach(item => {
-            let shouldShow = true;
-
-            // Apply search filter
-            if (searchTerm) {
-                const noteText = item.textContent.toLowerCase();
-                if (!noteText.includes(searchTerm)) {
-                    shouldShow = false;
-                }
-            }
-
-            // Apply status filter
-            if (statusFilter) {
-                if (statusFilter === 'signed' && item.dataset.signed !== 'true') {
-                    shouldShow = false;
-                }
-                if (statusFilter === 'pending' && item.dataset.signed !== 'false') {
-                    shouldShow = false;
-                }
-                if (statusFilter === 'with_homework' && item.dataset.homework !== 'true') {
-                    shouldShow = false;
-                }
-            }
-
-            // Show/hide item
-            item.style.display = shouldShow ? '' : 'none';
-        });
-    }
-
-    // View signature buttons
-    document.querySelectorAll('.view-signature-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const noteId = this.dataset.noteId;
-            viewSignature(noteId);
+    document.querySelectorAll('.view-signature-btn').forEach((btn) => {
+        btn.addEventListener('click', function () {
+            viewSignature(this.dataset.noteId);
         });
     });
 
-    // Request signatures
     const confirmRequestBtn = document.getElementById('confirmRequestSignatures');
     if (confirmRequestBtn) {
-        confirmRequestBtn.addEventListener('click', async function() {
+        confirmRequestBtn.addEventListener('click', async function () {
             try {
                 this.disabled = true;
                 this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sending...';
-
                 const response = await fetch(`/api/student/{{ student.id }}/request_signatures`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCsrfToken()
-                    }
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() }
                 });
-
                 const data = await response.json();
-
                 if (data.success) {
-                    showAlert('Signature request sent successfully!', 'success');
+                    showAlert('Signature request sent successfully.', 'success');
                     bootstrap.Modal.getInstance(document.getElementById('requestSignaturesModal')).hide();
                 } else {
                     showAlert(data.error || 'Failed to send request', 'danger');
                 }
-            } catch (error) {
+            } catch (e) {
                 showAlert('Error sending request', 'danger');
             } finally {
                 this.disabled = false;
@@ -557,39 +563,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Utility functions
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-
     async function viewSignature(noteId) {
         try {
             const response = await fetch(`/api/note/${noteId}/signature`);
             const data = await response.json();
-
             if (data.success) {
                 const modal = new bootstrap.Modal(document.getElementById('signatureViewModal'));
-                const container = document.getElementById('signatureContainer');
-                const studentName = document.getElementById('signatureStudentName');
-                const signatureDate = document.getElementById('signatureDate');
-
-                container.innerHTML = `<img src="${data.signature}" alt="Signature" class="img-fluid" style="max-height: 200px;">`;
-                studentName.textContent = `Signed by: ${data.student_name}`;
-                signatureDate.textContent = `On: ${new Date(data.signed_at).toLocaleString()}`;
-
+                document.getElementById('signatureContainer').innerHTML =
+                    `<img src="${data.signature}" alt="Signature" class="img-fluid" style="max-height: 200px;">`;
+                document.getElementById('signatureStudentName').textContent = `Signed by: ${data.student_name}`;
+                document.getElementById('signatureDate').textContent = `On: ${new Date(data.signed_at).toLocaleString()}`;
                 modal.show();
             } else {
                 showAlert('Signature not found', 'warning');
             }
-        } catch (error) {
+        } catch (e) {
             showAlert('Error loading signature', 'danger');
         }
     }
@@ -597,28 +585,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function showAlert(message, type) {
         const alertDiv = document.createElement('div');
         alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-        alertDiv.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-
-        const container = document.querySelector('.container-fluid');
-        if (container) {
-            container.insertBefore(alertDiv, container.firstChild);
-        }
-
-        setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.remove();
-            }
-        }, 5000);
+        alertDiv.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+        const main = document.querySelector('main');
+        if (main) main.insertBefore(alertDiv, main.firstChild);
+        setTimeout(() => { if (alertDiv.parentNode) alertDiv.remove(); }, 5000);
     }
 
     function getCsrfToken() {
         const metaTag = document.querySelector('meta[name="csrf-token"]');
-        if (metaTag) {
-            return metaTag.getAttribute('content');
-        }
+        if (metaTag) return metaTag.getAttribute('content');
+        const csrfInput = document.querySelector('input[name="csrf_token"]');
+        if (csrfInput) return csrfInput.value;
         return '';
     }
 });

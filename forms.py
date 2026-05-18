@@ -27,6 +27,18 @@ class LoginForm(FlaskForm):
     remember = BooleanField('Remember Me')
 
 
+class ForgotPasswordForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired(), EmailValidator()])
+
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField('New Password', validators=[DataRequired(), Length(min=6)])
+    confirm_password = PasswordField(
+        'Confirm New Password',
+        validators=[DataRequired(), EqualTo('password')]
+    )
+
+
 class StudentRegistrationForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired(), Length(min=3, max=80)])
     email = StringField('Email', validators=[DataRequired(), EmailValidator()])

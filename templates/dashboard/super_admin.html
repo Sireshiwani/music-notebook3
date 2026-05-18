@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Super Admin Dashboard - Shajara{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1"><i class="bi bi-shield-lock"></i> Super Admin Dashboard</h2>
+        <p class="text-muted mb-0">Manage HOD ownership and school setup centrally.</p>
+    </div>
+    <a href="{{ url_for('auth.register_hod') }}" class="btn btn-primary">
+        <i class="bi bi-person-plus"></i> Create HOD
+    </a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h6 class="text-muted">Schools</h6>
+                <h3 class="mb-0">{{ schools|length }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h6 class="text-muted">Teachers</h6>
+                <h3 class="mb-0">{{ teachers_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h6 class="text-muted">Students</h6>
+                <h3 class="mb-0">{{ students_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h6 class="text-muted">Parents</h6>
+                <h3 class="mb-0">{{ parents_count }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <strong>Create School</strong>
+            </div>
+            <div class="card-body">
+                {% if not hod_users %}
+                    <div class="alert alert-warning mb-0">
+                        No HOD accounts found. Create one first.
+                    </div>
+                {% else %}
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="create_school">
+                        <div class="mb-3">
+                            <label class="form-label">School Name</label>
+                            <input type="text" name="school_name" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Assign HOD</label>
+                            <select name="hod_user_id" class="form-select" required>
+                                <option value="">Select HOD...</option>
+                                {% for hod in hod_users %}
+                                    <option value="{{ hod.id }}">{{ hod.full_name }} ({{ hod.username }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button class="btn btn-success" type="submit">
+                            <i class="bi bi-building-add"></i> Create School
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <strong>Existing Schools</strong>
+                <span class="badge bg-primary">{{ schools|length }}</span>
+            </div>
+            <div class="card-body">
+                {% if not schools %}
+                    <p class="text-muted mb-0">No schools created yet.</p>
+                {% else %}
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>School</th>
+                                    <th>Current HOD</th>
+                                    <th style="width: 260px;">Reassign</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for school in schools %}
+                                    <tr>
+                                        <td>{{ school.name }}</td>
+                                        <td>{{ school.hod.full_name if school.hod else "Unassigned" }}</td>
+                                        <td>
+                                            <form method="POST" class="d-flex gap-2">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <input type="hidden" name="action" value="reassign_hod">
+                                                <input type="hidden" name="school_id" value="{{ school.id }}">
+                                                <select name="hod_user_id" class="form-select form-select-sm" required>
+                                                    {% for hod in hod_users %}
+                                                        <option value="{{ hod.id }}" {% if school.hod_user_id == hod.id %}selected{% endif %}>
+                                                            {{ hod.full_name }}
+                                                        </option>
+                                                    {% endfor %}
+                                                </select>
+                                                <button class="btn btn-outline-primary btn-sm" type="submit">Save</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

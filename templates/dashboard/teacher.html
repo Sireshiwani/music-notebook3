@@ -2,182 +2,302 @@
 
 {% block title %}Teacher Dashboard - Shajara{% endblock %}
 
+{% block extra_css %}
+<style>
+    .roster-tabs .nav-link {
+        border-radius: 999px;
+        padding: 0.5rem 1.1rem;
+        font-weight: 600;
+        color: #475569;
+        background: #f1f5f9;
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+        border: 1px solid transparent;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .roster-tabs .nav-link:hover {
+        background: #e2e8f0;
+        color: #0f172a;
+    }
+
+    .roster-tabs .nav-link.active {
+        background: linear-gradient(135deg, #4f46e5, #3b82f6);
+        color: #fff;
+        border-color: transparent;
+    }
+
+    .roster-tabs .nav-link .count {
+        margin-left: 0.4rem;
+        font-size: 0.8rem;
+        background: rgba(255, 255, 255, 0.18);
+        padding: 0.1rem 0.5rem;
+        border-radius: 999px;
+    }
+
+    .roster-tabs .nav-link:not(.active) .count {
+        background: rgba(15, 23, 42, 0.08);
+        color: #475569;
+    }
+
+    .student-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.85rem 1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        margin-bottom: 0.6rem;
+        background: #fff;
+        text-decoration: none;
+        color: #0f172a;
+        transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+    }
+
+    .student-row:hover {
+        transform: translateY(-1px);
+        border-color: #c7d2fe;
+        box-shadow: 0 8px 20px rgba(79, 70, 229, 0.07);
+        color: #0f172a;
+    }
+
+    .student-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #4f46e5, #3b82f6);
+        color: #fff;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .student-name {
+        font-weight: 600;
+    }
+
+    .student-meta {
+        color: #64748b;
+        font-size: 0.85rem;
+    }
+
+    .student-badge-pill {
+        background: #f1f5f9;
+        color: #475569;
+        font-size: 0.7rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: 999px;
+        margin-right: 0.25rem;
+    }
+
+    .roster-search input {
+        border-radius: 999px;
+        padding-left: 2.5rem;
+    }
+
+    .roster-search {
+        position: relative;
+    }
+
+    .roster-search .search-icon {
+        position: absolute;
+        top: 50%;
+        left: 1rem;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        pointer-events: none;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 2rem 1rem;
+        color: #64748b;
+    }
+
+    .stat-card {
+        border-radius: 18px;
+        border: 1px solid #e2e8f0;
+        padding: 1.25rem 1.5rem;
+        background: #ffffff;
+    }
+
+    .stat-card .label {
+        font-size: 0.85rem;
+        color: #64748b;
+        font-weight: 500;
+    }
+
+    .stat-card .value {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #0f172a;
+        line-height: 1.1;
+        margin-top: 0.25rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row">
-    <!-- Sidebar with Students -->
-    <div class="col-md-4 col-lg-3">
-        <div class="card shadow-sm">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="bi bi-people"></i> My Students</h5>
+{% set roster_groups = [] %}
+{% set _ = roster_groups.append({'key': 'independent', 'label': 'Independent', 'students': private_students}) %}
+{% for block in school_rosters %}
+    {% set _ = roster_groups.append({'key': 'school-' ~ block.school.id, 'label': block.school.name, 'students': block.students}) %}
+{% endfor %}
+
+<!-- Welcome + Quick Stats -->
+<div class="card shadow-sm mb-4 border-0">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <h3 class="card-title mb-1">
+                    <i class="bi bi-person-badge text-primary"></i>
+                    Welcome, {{ current_user.full_name }}
+                </h3>
+                <p class="text-muted mb-0">
+                    {{ students|length }} student{{ '' if students|length == 1 else 's' }} you can work with
+                    across your private class and school assignments.
+                </p>
             </div>
-            <div class="card-body p-0 student-list">
-                <div class="list-group list-group-flush" style="max-height: 500px; overflow-y: auto;">
-                    {% for student in students %}
-                    <a href="{{ url_for('notes.student_notes', student_id=student.id) }}"
-                       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong>{{ student.user.full_name }}</strong>
-                            <div class="text-muted small">@{{ student.user.username }}</div>
-                            {% if student_badges.get(student.id) %}
-                            <div class="mt-1">
-                                {% for label in student_badges[student.id] %}
-                                <span class="badge bg-light text-dark border me-1">{{ label }}</span>
-                                {% endfor %}
-                            </div>
-                            {% endif %}
-                        </div>
-                        <span class="badge bg-primary rounded-pill">
-                            {{ student_note_counts.get(student.id, 0) }}
-                        </span>
-                    </a>
-                    {% else %}
-                    <div class="list-group-item text-center text-muted py-4">
-                        <i class="bi bi-people display-6 mb-2"></i>
-                        <p class="mb-0">No students assigned yet</p>
-                    </div>
-                    {% endfor %}
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addStudentModal">
+                <i class="bi bi-person-plus"></i> Add student
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="label">Total students</div>
+                    <div class="value">{{ students|length }}</div>
                 </div>
-            </div>
-            <div class="card-footer">
-                <button class="btn btn-outline-primary btn-sm w-100" data-bs-toggle="modal" data-bs-target="#addStudentModal">
-                    <i class="bi bi-person-plus"></i> Add Student
-                </button>
+                <i class="bi bi-people display-6 text-primary"></i>
             </div>
         </div>
     </div>
-
-    <!-- Main Content -->
-    <div class="col-md-8 col-lg-9">
-        <!-- Welcome Card -->
-        <div class="card shadow-sm mb-4">
-            <div class="card-body">
-                <h3 class="card-title">
-                    <i class="bi bi-person-badge text-primary"></i> Welcome, {{ current_user.full_name }}!
-                </h3>
-                <p class="card-text">
-                    You have {{ students|length }} student(s) you can work with (private class and/or school assignments) and {{ recent_notes|length }} recent notes.
-                </p>
-            </div>
-        </div>
-
-        {% if school_rosters %}
-        <div class="card shadow-sm mb-4">
-            <div class="card-header py-2 bg-light">
-                <h6 class="mb-0"><i class="bi bi-building"></i> School programs</h6>
-            </div>
-            <div class="card-body py-2">
-                {% for block in school_rosters %}
-                {% if block.students %}
-                <div class="mb-2 {% if not loop.last %}border-bottom pb-2{% endif %}">
-                    <strong>{{ block.school.name }}</strong>
-                    <span class="text-muted small"> — {{ block.students|length }} student(s) assigned to you</span>
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="label">Signed notes</div>
+                    <div class="value">{{ signed_notes_count }}</div>
                 </div>
-                {% endif %}
-                {% endfor %}
+                <i class="bi bi-check-circle display-6 text-success"></i>
             </div>
         </div>
-        {% endif %}
-
-        <!-- Recent Notes -->
-        <div class="card shadow-sm">
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="bi bi-journal-text"></i> Recent Notes</h5>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="label">Pending signatures</div>
+                    <div class="value">{{ pending_notes_count }}</div>
+                </div>
+                <i class="bi bi-clock display-6 text-warning"></i>
             </div>
-            <div class="card-body">
-                {% if recent_notes %}
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Title</th>
-                                <th>Student</th>
-                                <th>Date</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for note in recent_notes %}
-                            <tr>
-                                <td>{{ note.title|truncate(30) }}</td>
-                                <td>{{ note.student.user.full_name }}</td>
-                                <td>{{ note.date.strftime('%Y-%m-%d') }}</td>
-                                <td>
-                                    {% if note.signature %}
-                                    <span class="badge bg-success">
-                                        <i class="bi bi-check-circle"></i> Signed
-                                    </span>
-                                    {% else %}
-                                    <span class="badge bg-warning text-dark">
-                                        <i class="bi bi-clock"></i> Pending
-                                    </span>
+        </div>
+    </div>
+</div>
+
+<!-- My Students -->
+<div class="card shadow-sm border-0">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0"><i class="bi bi-people text-primary"></i> My Students</h4>
+        </div>
+
+        <!-- Roster tabs -->
+        <ul class="nav roster-tabs mb-3" id="rosterTabs" role="tablist">
+            {% for group in roster_groups %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if loop.first %}active{% endif %}"
+                        id="tab-{{ group.key }}"
+                        data-bs-toggle="tab"
+                        data-bs-target="#pane-{{ group.key }}"
+                        type="button"
+                        role="tab">
+                    {% if group.key == 'independent' %}
+                        <i class="bi bi-person"></i>
+                    {% else %}
+                        <i class="bi bi-building"></i>
+                    {% endif %}
+                    {{ group.label }}
+                    <span class="count">{{ group.students|length }}</span>
+                </button>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <!-- Tab content -->
+        <div class="tab-content" id="rosterTabContent">
+            {% for group in roster_groups %}
+            <div class="tab-pane fade {% if loop.first %}show active{% endif %}"
+                 id="pane-{{ group.key }}"
+                 role="tabpanel">
+
+                {% if group.students %}
+                <div class="roster-search mb-3">
+                    <i class="bi bi-search search-icon"></i>
+                    <input type="text"
+                           class="form-control student-filter-input"
+                           data-pane="{{ group.key }}"
+                           placeholder="Search students in {{ group.label }}...">
+                </div>
+
+                <div class="student-list" data-pane="{{ group.key }}">
+                    {% for student in group.students %}
+                        {% set initial = (student.user.full_name or student.user.username or '?')[:1]|upper %}
+                        <a href="{{ url_for('notes.student_notes', student_id=student.id) }}"
+                           class="student-row"
+                           data-search-value="{{ (student.user.full_name or '')|lower }} {{ (student.user.username or '')|lower }}">
+                            <div class="d-flex align-items-center gap-3">
+                                <span class="student-avatar">{{ initial }}</span>
+                                <div>
+                                    <div class="student-name">{{ student.user.full_name }}</div>
+                                    <div class="student-meta">@{{ student.user.username }}</div>
+                                    {% if student_badges.get(student.id) %}
+                                    <div class="mt-1">
+                                        {% for label in student_badges[student.id] %}
+                                            <span class="student-badge-pill">{{ label }}</span>
+                                        {% endfor %}
+                                    </div>
                                     {% endif %}
-                                </td>
-                                <td>
-                                    <a href="{{ url_for('notes.view_note', note_id=note.id) }}"
-                                       class="btn btn-sm btn-outline-primary">
-                                        <i class="bi bi-eye"></i> View
-                                    </a>
-                                    <a href="{{ url_for('notes.edit_note', note_id=note.id) }}"
-                                       class="btn btn-sm btn-outline-secondary">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center py-4">
-                    <i class="bi bi-journal-text display-6 text-muted mb-3"></i>
-                    <p class="text-muted">No notes created yet. Start by adding a note for a student.</p>
-                </div>
-                {% endif %}
-            </div>
-        </div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-3">
+                                <span class="badge bg-primary rounded-pill">
+                                    {{ student_note_counts.get(student.id, 0) }} notes
+                                </span>
+                                <i class="bi bi-chevron-right text-muted"></i>
+                            </div>
+                        </a>
+                    {% endfor %}
 
-        <!-- Quick Stats -->
-        <div class="row mt-4">
-            <div class="col-md-4">
-                <div class="card text-white bg-primary mb-3">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="card-title">Total Students</h6>
-                                <h2 class="mb-0">{{ students|length }}</h2>
-                            </div>
-                            <i class="bi bi-people display-6"></i>
-                        </div>
+                    <div class="empty-state filter-empty d-none">
+                        <i class="bi bi-search display-6 mb-2 d-block"></i>
+                        No students match your search.
                     </div>
                 </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card text-white bg-success mb-3">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="card-title">Signed Notes</h6>
-                                <h2 class="mb-0">{{ signed_notes_count }}</h2>
-                            </div>
-                            <i class="bi bi-check-circle display-6"></i>
-                        </div>
+
+                {% else %}
+                    <div class="empty-state">
+                        <i class="bi bi-people display-6 mb-2 d-block"></i>
+                        {% if group.key == 'independent' %}
+                            No independent (private class) students yet. Use “Add student” to invite one.
+                        {% else %}
+                            No students assigned to you in {{ group.label }} yet.
+                            Ask your HOD to assign students to you in this school.
+                        {% endif %}
                     </div>
-                </div>
+                {% endif %}
+
             </div>
-            <div class="col-md-4">
-                <div class="card text-white bg-info mb-3">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="card-title">Pending Notes</h6>
-                                <h2 class="mb-0">{{ pending_notes_count }}</h2>
-                            </div>
-                            <i class="bi bi-clock display-6"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            {% endfor %}
         </div>
     </div>
 </div>
@@ -187,13 +307,12 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Add Student to Your Class</h5>
+                <h5 class="modal-title">Add student to your private class</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <!-- Student Search Section -->
                 <div class="mb-4">
-                    <label class="form-label">Search for Student</label>
+                    <label class="form-label">Search for student</label>
                     <div class="input-group mb-3">
                         <input type="text" id="studentSearchInput" class="form-control"
                                placeholder="Search by student name or username...">
@@ -201,8 +320,6 @@
                             <i class="bi bi-search"></i> Search
                         </button>
                     </div>
-
-                    <!-- Search Results -->
                     <div id="searchResults" class="mt-3" style="max-height: 300px; overflow-y: auto;">
                         <div class="text-center text-muted py-3">
                             <i class="bi bi-search display-6 mb-2"></i>
@@ -211,14 +328,13 @@
                     </div>
                 </div>
 
-                <!-- Or Add by Username Directly -->
                 <div class="border-top pt-3">
-                    <label class="form-label">Or Add by Username</label>
+                    <label class="form-label">Or add by username</label>
                     <div class="input-group">
                         <input type="text" id="studentUsernameInput" class="form-control"
                                placeholder="Enter student's exact username">
                         <button class="btn btn-success" type="button" id="addStudentByUsernameBtn">
-                            <i class="bi bi-person-plus"></i> Add Student
+                            <i class="bi bi-person-plus"></i> Add student
                         </button>
                     </div>
                 </div>
@@ -235,11 +351,11 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
-                <h5 class="modal-title">Success!</h5>
+                <h5 class="modal-title">Success</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p id="successMessage">Student added successfully!</p>
+                <p id="successMessage">Student added successfully.</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-success" data-bs-dismiss="modal">OK</button>
@@ -252,53 +368,63 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Add Student Functionality
+    initRosterFilters();
     initStudentManagement();
-
-    // Quick stats calculation
-    updateQuickStats();
 });
 
+/* ---- Per-tab live search across student rows ---- */
+function initRosterFilters() {
+    document.querySelectorAll('.student-filter-input').forEach((input) => {
+        input.addEventListener('input', () => applyFilter(input));
+    });
+}
+
+function applyFilter(input) {
+    const paneKey = input.dataset.pane;
+    const list = document.querySelector(`.student-list[data-pane="${paneKey}"]`);
+    if (!list) return;
+
+    const term = input.value.trim().toLowerCase();
+    let visible = 0;
+
+    list.querySelectorAll('.student-row').forEach((row) => {
+        const haystack = row.dataset.searchValue || '';
+        const matches = !term || haystack.includes(term);
+        row.classList.toggle('d-none', !matches);
+        if (matches) visible += 1;
+    });
+
+    const emptyState = list.querySelector('.filter-empty');
+    if (emptyState) {
+        emptyState.classList.toggle('d-none', visible !== 0 || !term);
+    }
+}
+
+/* ---- Existing add-student modal logic (preserved) ---- */
 function initStudentManagement() {
     const searchBtn = document.getElementById('searchStudentBtn');
     const searchInput = document.getElementById('studentSearchInput');
     const addByUsernameBtn = document.getElementById('addStudentByUsernameBtn');
     const usernameInput = document.getElementById('studentUsernameInput');
 
-    // Search students on button click
-    if (searchBtn) {
-        searchBtn.addEventListener('click', searchStudents);
-    }
-
-    // Search on enter key
+    if (searchBtn) searchBtn.addEventListener('click', searchStudents);
     if (searchInput) {
-        searchInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                searchStudents();
-            }
+        searchInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') searchStudents();
         });
     }
-
-    // Add student by username
     if (addByUsernameBtn) {
-        addByUsernameBtn.addEventListener('click', function() {
+        addByUsernameBtn.addEventListener('click', function () {
             const username = usernameInput.value.trim();
-            if (username) {
-                addStudentByUsername(username);
-            } else {
-                showAlert('Please enter a username', 'danger');
-            }
+            if (username) addStudentByUsername(username);
+            else showAlert('Please enter a username', 'danger');
         });
     }
-
-    // Add student on enter key in username input
     if (usernameInput) {
-        usernameInput.addEventListener('keypress', function(e) {
+        usernameInput.addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
                 const username = usernameInput.value.trim();
-                if (username) {
-                    addStudentByUsername(username);
-                }
+                if (username) addStudentByUsername(username);
             }
         });
     }
@@ -310,65 +436,43 @@ async function searchStudents() {
     const resultsContainer = document.getElementById('searchResults');
 
     if (!searchTerm) {
-        resultsContainer.innerHTML = `
-            <div class="alert alert-warning">
-                Please enter a search term
-            </div>
-        `;
+        resultsContainer.innerHTML = `<div class="alert alert-warning">Please enter a search term</div>`;
         return;
     }
 
-    // Show loading
     resultsContainer.innerHTML = `
         <div class="text-center py-3">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
+            <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
             <p class="mt-2">Searching for students...</p>
-        </div>
-    `;
+        </div>`;
 
     try {
         const response = await fetch(`/api/students/search?q=${encodeURIComponent(searchTerm)}`);
         const data = await response.json();
-
         if (data.success) {
             displaySearchResults(data.students);
         } else {
-            resultsContainer.innerHTML = `
-                <div class="alert alert-danger">
-                    ${data.error || 'Search failed'}
-                </div>
-            `;
+            resultsContainer.innerHTML = `<div class="alert alert-danger">${data.error || 'Search failed'}</div>`;
         }
     } catch (error) {
         console.error('Search error:', error);
-        resultsContainer.innerHTML = `
-            <div class="alert alert-danger">
-                Error searching for students
-            </div>
-        `;
+        resultsContainer.innerHTML = `<div class="alert alert-danger">Error searching for students</div>`;
     }
 }
 
 function displaySearchResults(students) {
     const resultsContainer = document.getElementById('searchResults');
-
     if (!students || students.length === 0) {
         resultsContainer.innerHTML = `
             <div class="text-center py-3">
                 <i class="bi bi-people display-6 text-muted mb-2"></i>
                 <p class="text-muted">No students found</p>
-            </div>
-        `;
+            </div>`;
         return;
     }
 
     let html = '<div class="list-group">';
-
     students.forEach(student => {
-        const isAlreadyAdded = document.querySelector(`[data-student-id="${student.id}"]`) !== null;
-
         html += `
             <div class="list-group-item list-group-item-action">
                 <div class="d-flex justify-content-between align-items-center">
@@ -380,30 +484,20 @@ function displaySearchResults(students) {
                             <small class="badge bg-secondary">${student.email}</small>
                         </div>
                     </div>
-                    <div>
-                        ${isAlreadyAdded ?
-                            '<span class="badge bg-success">Already Added</span>' :
-                            `<button class="btn btn-sm btn-primary add-student-btn"
-                                     data-student-id="${student.id}"
-                                     data-student-name="${student.full_name}">
-                                <i class="bi bi-person-plus"></i> Add
-                            </button>`
-                        }
-                    </div>
+                    <button class="btn btn-sm btn-primary add-student-btn"
+                            data-student-id="${student.id}"
+                            data-student-name="${student.full_name}">
+                        <i class="bi bi-person-plus"></i> Add
+                    </button>
                 </div>
-            </div>
-        `;
+            </div>`;
     });
-
     html += '</div>';
     resultsContainer.innerHTML = html;
 
-    // Add event listeners to add buttons
     resultsContainer.querySelectorAll('.add-student-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const studentId = this.dataset.studentId;
-            const studentName = this.dataset.studentName;
-            addStudent(studentId, studentName);
+        btn.addEventListener('click', function () {
+            addStudent(this.dataset.studentId, this.dataset.studentName);
         });
     });
 }
@@ -412,30 +506,13 @@ async function addStudent(studentId, studentName) {
     try {
         const response = await fetch('/api/students/add', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCsrfToken()
-            },
-            body: JSON.stringify({
-                student_id: studentId
-            })
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+            body: JSON.stringify({ student_id: studentId })
         });
-
         const data = await response.json();
-
         if (data.success) {
-            // Update button to show "Already Added"
-            const btn = document.querySelector(`.add-student-btn[data-student-id="${studentId}"]`);
-            if (btn) {
-                btn.outerHTML = '<span class="badge bg-success">Already Added</span>';
-            }
-
-            // Show success message
-            showSuccessMessage(`Student "${studentName}" added successfully!`);
-
-            // Update sidebar student list
-            updateStudentSidebar(data.student);
-
+            showSuccessMessage(`Student "${studentName}" added successfully.`);
+            setTimeout(() => window.location.reload(), 800);
         } else {
             showAlert(data.error || 'Failed to add student', 'danger');
         }
@@ -448,35 +525,19 @@ async function addStudent(studentId, studentName) {
 async function addStudentByUsername(username) {
     const usernameInput = document.getElementById('studentUsernameInput');
     const addBtn = document.getElementById('addStudentByUsernameBtn');
-
-    // Disable button during request
     addBtn.disabled = true;
     addBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Adding...';
-
     try {
         const response = await fetch('/api/students/add_by_username', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCsrfToken()
-            },
-            body: JSON.stringify({
-                username: username
-            })
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+            body: JSON.stringify({ username: username })
         });
-
         const data = await response.json();
-
         if (data.success) {
-            // Clear input
             usernameInput.value = '';
-
-            // Show success message
-            showSuccessMessage(`Student "${data.student.full_name}" added successfully!`);
-
-            // Update sidebar student list
-            updateStudentSidebar(data.student);
-
+            showSuccessMessage(`Student "${data.student.full_name}" added successfully.`);
+            setTimeout(() => window.location.reload(), 800);
         } else {
             showAlert(data.error || 'Failed to add student', 'danger');
         }
@@ -484,47 +545,8 @@ async function addStudentByUsername(username) {
         console.error('Add student by username error:', error);
         showAlert('Error adding student', 'danger');
     } finally {
-        // Re-enable button
         addBtn.disabled = false;
-        addBtn.innerHTML = '<i class="bi bi-person-plus"></i> Add Student';
-    }
-}
-
-function updateStudentSidebar(student) {
-    const studentList = document.querySelector('.student-list .list-group');
-
-    if (!studentList) return;
-
-    // Check if student already exists in sidebar
-    const existingStudent = studentList.querySelector(`[data-student-id="${student.id}"]`);
-    if (existingStudent) return;
-
-    // Add new student to sidebar
-    const studentItem = document.createElement('a');
-    studentItem.href = `/student/${student.id}/notes`;
-    studentItem.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
-    studentItem.setAttribute('data-student-id', student.id);
-
-    studentItem.innerHTML = `
-        <div>
-            <strong>${student.full_name}</strong>
-            <div class="text-muted small">@${student.username}</div>
-        </div>
-        <span class="badge bg-primary rounded-pill">0</span>
-    `;
-
-    studentList.prepend(studentItem);
-
-    // Update stats
-    updateQuickStats();
-}
-
-function updateQuickStats() {
-    // Update total students count
-    const studentCount = document.querySelectorAll('.student-list .list-group-item').length;
-    const totalStudentsElement = document.querySelector('.card.text-white.bg-primary .h2');
-    if (totalStudentsElement) {
-        totalStudentsElement.textContent = studentCount;
+        addBtn.innerHTML = '<i class="bi bi-person-plus"></i> Add student';
     }
 }
 
@@ -533,48 +555,24 @@ function showSuccessMessage(message) {
     document.getElementById('successMessage').textContent = message;
     successModal.show();
 
-    // Close the add student modal
     const addStudentModal = bootstrap.Modal.getInstance(document.getElementById('addStudentModal'));
-    if (addStudentModal) {
-        addStudentModal.hide();
-    }
+    if (addStudentModal) addStudentModal.hide();
 }
 
 function showAlert(message, type) {
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-
-    // Insert at the top of the page
-    const container = document.querySelector('.container.my-4');
-    if (container) {
-        container.insertBefore(alertDiv, container.firstChild);
-    }
-
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.remove();
-        }
-    }, 5000);
+    alertDiv.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+    const main = document.querySelector('main');
+    if (main) main.insertBefore(alertDiv, main.firstChild);
+    setTimeout(() => { if (alertDiv.parentNode) alertDiv.remove(); }, 5000);
 }
 
 function getCsrfToken() {
-    // Get CSRF token from meta tag or form
     const metaTag = document.querySelector('meta[name="csrf-token"]');
-    if (metaTag) {
-        return metaTag.getAttribute('content');
-    }
-
-    // Fallback: try to get from form
+    if (metaTag) return metaTag.getAttribute('content');
     const csrfInput = document.querySelector('input[name="csrf_token"]');
-    if (csrfInput) {
-        return csrfInput.value;
-    }
-
+    if (csrfInput) return csrfInput.value;
     return '';
 }
 </script>

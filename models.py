@@ -17,7 +17,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
-    role = db.Column(db.String(20), nullable=False)  # 'teacher', 'student', 'parent', 'hod'
+    role = db.Column(db.String(20), nullable=False)  # 'teacher', 'student', 'parent', 'hod', 'super_admin'
     full_name = db.Column(db.String(120), nullable=False)
     phone = db.Column(db.String(20))
     is_active = db.Column(db.Boolean, default=True)

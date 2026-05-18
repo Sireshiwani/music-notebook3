@@ -2,7 +2,23 @@ import uuid
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, session, current_app, Flask
 from flask_login import login_user, logout_user, login_required, current_user
 from urllib.parse import urlparse  # Fixed import
-from models import db, User, Teacher, Student, Parent, Note, NoteSignature, StudentGoalSet, CalendarPeriod, SchoolTerm
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from email.message import EmailMessage
+import smtplib
+from models import (
+    db,
+    User,
+    Teacher,
+    Student,
+    Parent,
+    Note,
+    NoteSignature,
+    StudentGoalSet,
+    CalendarPeriod,
+    SchoolTerm,
+    School,
+    SchoolAssignment,
+)
 from goal_service import (
     get_or_create_goal_set,
     ensure_goal_set_created_audit,
@@ -18,9 +34,18 @@ from school_service import (
     teacher_accessible_student_ids,
     hod_can_view_note,
 )
-from forms import LoginForm, StudentRegistrationForm, ParentRegistrationForm, TeacherRegistrationForm, HodRegistrationForm, NoteForm, \
-    SignatureForm
-from datetime import datetime
+from forms import (
+    LoginForm,
+    StudentRegistrationForm,
+    ParentRegistrationForm,
+    TeacherRegistrationForm,
+    HodRegistrationForm,
+    NoteForm,
+    SignatureForm,
+    ForgotPasswordForm,
+    ResetPasswordForm,
+)
+from datetime import datetime, date
 import os
 from sqlalchemy import or_, func
 from services import FileUploadService
@@ -31,9 +56,89 @@ dashboard_bp = Blueprint('dashboard', __name__)
 notes_bp = Blueprint('notes', __name__)
 
 
+def _password_reset_serializer():
+    return URLSafeTimedSerializer(current_app.config['SECRET_KEY'], salt='password-reset')
+
+
+def _password_reset_password_tag(user: User) -> str:
+    # Include current password hash in the token payload so tokens become invalid after password change.
+    return user.password_hash[-24:]
+
+
+def _build_password_reset_token(user: User) -> str:
+    serializer = _password_reset_serializer()
+    payload = {'user_id': user.id, 'pwd_tag': _password_reset_password_tag(user)}
+    return serializer.dumps(payload)
+
+
+def _resolve_user_from_reset_token(token: str):
+    serializer = _password_reset_serializer()
+    max_age = int(current_app.config.get('PASSWORD_RESET_TOKEN_MAX_AGE', 3600))
+    try:
+        payload = serializer.loads(token, max_age=max_age)
+    except SignatureExpired:
+        return None, 'expired'
+    except BadSignature:
+        return None, 'invalid'
+
+    user = User.query.get(payload.get('user_id'))
+    if not user:
+        return None, 'invalid'
+    if payload.get('pwd_tag') != _password_reset_password_tag(user):
+        return None, 'invalid'
+    return user, None
+
+
+def _send_password_reset_email(user: User, token: str):
+    reset_url = url_for('auth.reset_password', token=token, _external=True)
+    sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'shajaraplatform@gmail.com')
+    recipient = user.email
+
+    msg = EmailMessage()
+    msg['Subject'] = 'Shajara password reset request'
+    msg['From'] = sender
+    msg['To'] = recipient
+    msg.set_content(
+        f"""Hello {user.full_name},
+
+We received a request to reset your Shajara password.
+
+Use this link to set a new password:
+{reset_url}
+
+This link expires in 1 hour. If you did not request this, you can ignore this email.
+
+Shajara Team
+"""
+    )
+
+    smtp_server = current_app.config.get('MAIL_SERVER', 'smtp.gmail.com')
+    smtp_port = int(current_app.config.get('MAIL_PORT', 587))
+    smtp_username = current_app.config.get('MAIL_USERNAME', 'shajaraplatform@gmail.com')
+    smtp_password = current_app.config.get('MAIL_PASSWORD', '')
+    use_tls = bool(current_app.config.get('MAIL_USE_TLS', True))
+
+    if not smtp_password:
+        raise RuntimeError('MAIL_PASSWORD is not configured.')
+
+    with smtplib.SMTP(smtp_server, smtp_port, timeout=20) as server:
+        if use_tls:
+            server.starttls()
+        server.login(smtp_username, smtp_password)
+        server.send_message(msg)
+
+
+
+# Public landing
+@auth_bp.route('/', methods=['GET'])
+def home():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard.dashboard'))
+    return render_template('home.html')
+
 
 # Auth Routes
-@auth_bp.route('/', methods=['GET', 'POST'])
+@auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard.dashboard'))
@@ -69,6 +174,60 @@ def logout():
     logout_user()
     flash('You have been logged out', 'info')
     return redirect(url_for('auth.login'))
+
+
+@auth_bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard.dashboard'))
+
+    form = ForgotPasswordForm()
+    if form.validate_on_submit():
+        email_input = form.email.data.strip().lower()
+        user = User.query.filter(func.lower(User.email) == email_input).first()
+        if user:
+            try:
+                token = _build_password_reset_token(user)
+                _send_password_reset_email(user, token)
+            except Exception as exc:
+                current_app.logger.error(f'Password reset email send failed: {exc}')
+                flash(
+                    'Unable to send reset email right now. Please try again shortly.',
+                    'danger'
+                )
+                return render_template('auth/forgot_password.html', form=form)
+
+        # Prevent account enumeration by using a generic response
+        flash(
+            'If an account exists for that email, password reset instructions were sent.',
+            'info'
+        )
+        return redirect(url_for('auth.login'))
+
+    return render_template('auth/forgot_password.html', form=form)
+
+
+@auth_bp.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard.dashboard'))
+
+    user, token_error = _resolve_user_from_reset_token(token)
+    if token_error == 'expired':
+        flash('This password reset link has expired. Request a new one.', 'warning')
+        return redirect(url_for('auth.forgot_password'))
+    if token_error:
+        flash('Invalid password reset link. Request a new one.', 'danger')
+        return redirect(url_for('auth.forgot_password'))
+
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        user.set_password(form.password.data)
+        db.session.commit()
+        flash('Your password has been reset. Please login.', 'success')
+        return redirect(url_for('auth.login'))
+
+    return render_template('auth/reset_password.html', form=form)
 
 
 @auth_bp.route('/register/student', methods=['GET', 'POST'])
@@ -211,7 +370,11 @@ def register_teacher():
 
 @auth_bp.route('/register/hod', methods=['GET', 'POST'])
 def register_hod():
-    if current_user.is_authenticated:
+    if not current_user.is_authenticated:
+        flash('Please log in as Super Admin to continue.', 'warning')
+        return redirect(url_for('auth.login'))
+    if current_user.role != 'super_admin':
+        flash('Only a Super Admin can register HOD accounts.', 'danger')
         return redirect(url_for('dashboard.dashboard'))
 
     form = HodRegistrationForm()
@@ -330,6 +493,9 @@ def add_student():
 @dashboard_bp.route('/dashboard')
 @login_required
 def dashboard():
+    if current_user.role == 'super_admin':
+        return redirect(url_for('dashboard.super_admin_dashboard'))
+
     if current_user.role == 'hod':
         return redirect(url_for('goals.hod_dashboard'))
 
@@ -337,6 +503,11 @@ def dashboard():
         teacher = current_user.teacher_profile
         students = teacher_accessible_students(teacher) if teacher else []
         school_rosters = teacher_school_rosters(teacher) if teacher else []
+        private_students = (
+            sorted(teacher.students, key=lambda s: (s.user.full_name or '').lower())
+            if teacher
+            else []
+        )
         student_note_counts = {}
         if teacher:
             student_note_counts = dict(
@@ -345,8 +516,6 @@ def dashboard():
                 .group_by(Note.student_id)
                 .all()
             )
-        recent_notes = Note.query.filter_by(teacher_id=teacher.id).order_by(Note.date.desc()).limit(
-            10).all() if teacher else []
         signed_notes_count = (
             Note.query.filter(Note.teacher_id == teacher.id).filter(Note.signature.has()).count()
             if teacher
@@ -362,10 +531,10 @@ def dashboard():
         return render_template(
             'dashboard/teacher.html',
             students=students,
+            private_students=private_students,
             school_rosters=school_rosters,
             student_note_counts=student_note_counts,
             student_badges=student_badges,
-            recent_notes=recent_notes,
             signed_notes_count=signed_notes_count,
             pending_notes_count=pending_notes_count,
         )
@@ -438,12 +607,130 @@ def dashboard():
             children_goal_summaries=children_goal_summaries,
         )
 
+    flash('Unsupported role configuration. Contact Super Admin.', 'warning')
+    return redirect(url_for('auth.logout'))
+
+
+@dashboard_bp.route('/super-admin/dashboard', methods=['GET', 'POST'])
+@login_required
+def super_admin_dashboard():
+    if current_user.role != 'super_admin':
+        flash('Access denied', 'danger')
+        return redirect(url_for('dashboard.dashboard'))
+
+    if request.method == 'POST':
+        action = (request.form.get('action') or '').strip()
+        if action == 'create_school':
+            school_name = (request.form.get('school_name') or '').strip()
+            hod_user_id = request.form.get('hod_user_id', type=int)
+            if not school_name:
+                flash('School name is required.', 'danger')
+                return redirect(url_for('dashboard.super_admin_dashboard'))
+            if not hod_user_id:
+                flash('Select an HOD.', 'danger')
+                return redirect(url_for('dashboard.super_admin_dashboard'))
+            hod_user = User.query.filter_by(id=hod_user_id, role='hod').first()
+            if not hod_user:
+                flash('Selected HOD account is invalid.', 'danger')
+                return redirect(url_for('dashboard.super_admin_dashboard'))
+            existing = School.query.filter(func.lower(School.name) == school_name.lower()).first()
+            if existing:
+                flash('A school with that name already exists.', 'warning')
+                return redirect(url_for('dashboard.super_admin_dashboard'))
+            school = School(name=school_name, hod_user_id=hod_user.id)
+            db.session.add(school)
+            db.session.commit()
+            flash('School created successfully.', 'success')
+            return redirect(url_for('dashboard.super_admin_dashboard'))
+
+        if action == 'reassign_hod':
+            school_id = request.form.get('school_id', type=int)
+            hod_user_id = request.form.get('hod_user_id', type=int)
+            school = School.query.get(school_id) if school_id else None
+            hod_user = User.query.filter_by(id=hod_user_id, role='hod').first() if hod_user_id else None
+            if not school or not hod_user:
+                flash('Select a valid school and HOD.', 'danger')
+                return redirect(url_for('dashboard.super_admin_dashboard'))
+            school.hod_user_id = hod_user.id
+            db.session.commit()
+            flash('School HOD updated.', 'success')
+            return redirect(url_for('dashboard.super_admin_dashboard'))
+
+    hod_users = User.query.filter_by(role='hod', is_active=True).order_by(User.full_name.asc()).all()
+    schools = School.query.order_by(School.name.asc()).all()
+    teachers_count = Teacher.query.count()
+    students_count = Student.query.count()
+    parents_count = Parent.query.count()
+
+    return render_template(
+        'dashboard/super_admin.html',
+        schools=schools,
+        hod_users=hod_users,
+        teachers_count=teachers_count,
+        students_count=students_count,
+        parents_count=parents_count,
+    )
+
 
 # Notes Routes
+def _goal_set_is_current(gs: StudentGoalSet, today: date) -> bool:
+    """A goal set is "current" if today falls within its calendar period or school term."""
+    if gs.calendar_period_id and gs.calendar_period:
+        return gs.calendar_period.start_date <= today <= gs.calendar_period.end_date
+    if gs.school_term_id and gs.school_term:
+        return gs.school_term.start_date <= today <= gs.school_term.end_date
+    return False
+
+
+def _ensure_current_goal_sets_for_teacher(student: Student, teacher: Teacher, today: date) -> None:
+    """Auto-create goal sets for the calendar period and any school terms covering today.
+
+    Runs only when the teacher hasn't explicitly chosen a period/term via query string.
+    Idempotent — get_or_create_goal_set returns the existing row if one already matches.
+    """
+    created_any = False
+
+    current_cp = (
+        CalendarPeriod.query.filter(
+            CalendarPeriod.start_date <= today,
+            CalendarPeriod.end_date >= today,
+        )
+        .order_by(CalendarPeriod.start_date.desc())
+        .first()
+    )
+    if current_cp:
+        gs, cr = get_or_create_goal_set(student.id, teacher.id, calendar_period_id=current_cp.id)
+        if cr:
+            ensure_goal_set_created_audit(gs, current_user.id)
+            created_any = True
+
+    school_ids = [
+        a.school_id
+        for a in SchoolAssignment.query.filter_by(
+            teacher_id=teacher.id, student_id=student.id
+        ).all()
+    ]
+    if school_ids:
+        current_terms = SchoolTerm.query.filter(
+            SchoolTerm.school_id.in_(school_ids),
+            SchoolTerm.start_date <= today,
+            SchoolTerm.end_date >= today,
+        ).all()
+        for term in current_terms:
+            gs, cr = get_or_create_goal_set(student.id, teacher.id, school_term_id=term.id)
+            if cr:
+                ensure_goal_set_created_audit(gs, current_user.id)
+                created_any = True
+
+    if created_any:
+        db.session.commit()
+
+
 @notes_bp.route('/student/<int:student_id>/notes')
 @login_required
 def student_notes(student_id):
-    # Authorization check
+    today = date.today()
+
     if current_user.role == 'teacher':
         teacher = current_user.teacher_profile
         student = Student.query.get_or_404(student_id)
@@ -464,19 +751,24 @@ def student_notes(student_id):
             if cr:
                 ensure_goal_set_created_audit(gs, current_user.id)
             db.session.commit()
+        else:
+            _ensure_current_goal_sets_for_teacher(student, teacher, today)
 
         notes = Note.query.filter_by(student_id=student_id, teacher_id=teacher.id).order_by(Note.date.desc()).all()
         goal_sets = StudentGoalSet.query.filter_by(
             student_id=student_id, teacher_id=teacher.id
         ).order_by(StudentGoalSet.updated_at.desc()).all()
-        goal_meta = [(gs, completion_percent(gs)) for gs in goal_sets]
+        current_sets = [(gs, completion_percent(gs)) for gs in goal_sets if _goal_set_is_current(gs, today)]
+        other_sets = [(gs, completion_percent(gs)) for gs in goal_sets if not _goal_set_is_current(gs, today)]
         calendar_periods = CalendarPeriod.query.order_by(CalendarPeriod.start_date.desc()).all()
         school_options = teacher_school_options(teacher.id)
 
         return render_template('notes/student_notes.html',
                                student=student,
                                notes=notes,
-                               goal_sets_meta=goal_meta,
+                               current_sets=current_sets,
+                               other_sets=other_sets,
+                               today=today,
                                calendar_periods=calendar_periods,
                                school_options=school_options)
 
@@ -490,12 +782,15 @@ def student_notes(student_id):
         goal_sets = StudentGoalSet.query.filter_by(student_id=student_id).order_by(
             StudentGoalSet.updated_at.desc()
         ).all()
-        goal_meta = [(gs, completion_percent(gs)) for gs in goal_sets]
+        current_sets = [(gs, completion_percent(gs)) for gs in goal_sets if _goal_set_is_current(gs, today)]
+        other_sets = [(gs, completion_percent(gs)) for gs in goal_sets if not _goal_set_is_current(gs, today)]
 
         return render_template('notes/student_notes.html',
                                student=student,
                                notes=notes,
-                               goal_sets_meta=goal_meta,
+                               current_sets=current_sets,
+                               other_sets=other_sets,
+                               today=today,
                                calendar_periods=[],
                                school_options=[])
 
@@ -503,7 +798,6 @@ def student_notes(student_id):
         parent = current_user.parent_profile
         student = Student.query.get_or_404(student_id)
 
-        # Check if parent has access to this student
         if student not in parent.children:
             flash('Not authorized to view this student\'s notes', 'danger')
             return redirect(url_for('dashboard.dashboard'))
@@ -512,12 +806,15 @@ def student_notes(student_id):
         goal_sets = StudentGoalSet.query.filter_by(student_id=student_id).order_by(
             StudentGoalSet.updated_at.desc()
         ).all()
-        goal_meta = [(gs, completion_percent(gs)) for gs in goal_sets]
+        current_sets = [(gs, completion_percent(gs)) for gs in goal_sets if _goal_set_is_current(gs, today)]
+        other_sets = [(gs, completion_percent(gs)) for gs in goal_sets if not _goal_set_is_current(gs, today)]
 
         return render_template('notes/student_notes.html',
                                student=student,
                                notes=notes,
-                               goal_sets_meta=goal_meta,
+                               current_sets=current_sets,
+                               other_sets=other_sets,
+                               today=today,
                                calendar_periods=[],
                                school_options=[])
 
